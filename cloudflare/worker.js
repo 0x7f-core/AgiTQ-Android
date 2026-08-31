@@ -1,0 +1,154 @@
+const CACHE_TTL = 300;
+const YAHOO = {
+  SPX: 'https://query1.finance.yahoo.com/v8/finance/chart/^GSPC?range=500d&interval=1d',
+  QQQ: 'https://query1.finance.yahoo.com/v8/finance/chart/QQQ?range=500d&interval=1d',
+  TQQQ: 'https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?range=500d&interval=1d',
+};
+const FGI_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Cache-Control': `public, max-age=${CACHE_TTL}`,
+};
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
+function sma(data, period) {
+  const out = new Array(data.length).fill(null);
+  for (let i = period - 1; i < data.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += data[i - j];
+    out[i] = sum / period;
+  }
+  return out;
+}
+
+function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
+  const ma = sma(sig.closes, period);
+  let position = 'BELOW';
+  let buyStage = 0;
+  let localPeak = 0;
+  let tsArmed = true;
+  let daysAbove = 0;
+  let isAlert = false;
+  let alertMsg = '';
+
+  for (let i = 0; i < sig.closes.length; i++) {
+    const cSig = sig.closes[i];
+    const cSma = ma[i];
+    const cTqqq = tqqq.closes[Math.min(i, tqqq.closes.length - 1)];
+    if (!Number.isFinite(cSma) || !Number.isFinite(cTqqq)) continue;
+
+    const bUp = cSma * (1 + upB);
+    const bDown = cSma * (1 - dnB);
+    let todayPos = position;
+    if (cSig >= bUp) todayPos = 'ABOVE';
+    else if (cSig < bDown) todayPos = 'BELOW';
+
+    if (position === 'BELOW' && todayPos === 'ABOVE') {
+      buyStage = 1;
+      localPeak = cTqqq;
+      tsArmed = true;
+      daysAbove = 1;
+      isAlert = false;
+    } else if (position === 'ABOVE' && todayPos === 'BELOW') {
+      buyStage = 0;
+      localPeak = 0;
+      daysAbove = 0;
+      isAlert = false;
+    } else if (todayPos === 'ABOVE') {
+      daysAbove++;
+      if (cTqqq > localPeak) localPeak = cTqqq;
+      let triggerTs = false;
+      if (cTqqq <= localPeak * 0.75) {
+        if (mode === 'single' && tsArmed) {
+          triggerTs = true;
+          tsArmed = false;
+        } else if (mode === 'multi') {
+          triggerTs = true;
+          localPeak = cTqqq;
+        }
+      }
+      isAlert = triggerTs;
+      alertMsg = triggerTs ? '🚨 긴급대피 발동 (TS -25%)' : '';
+      if (buyStage > 0 && buyStage <= 3) buyStage++;
+    }
+    position = todayPos;
+  }
+
+  const cur = tqqq.closes[tqqq.closes.length - 1];
+  const dd = localPeak > 0 ? ((cur - localPeak) / localPeak) * 100 : 0;
+  if (position === 'BELOW') return {
+    name: '하단 밴드 이탈 (전량 탈출)', alert: false,
+    lines: [['TQQQ·SPYM', '전량 매도'], ['SGOV', '대피 완료']],
+    drawdown: null, position, daysAbove, sma: ma[ma.length - 1],
+  };
+  if (isAlert) return {
+    name: alertMsg, alert: true,
+    lines: [['TQQQ', '절반 매도'], ['SPYM', '즉시 전환']],
+    drawdown: dd, position, daysAbove, sma: ma[ma.length - 1],
+  };
+  if (daysAbove === 1) return { name: '상단 밴드 돌파 1일 차', alert:false, lines:[['TQQQ','1/3 매수'],['SGOV','일부 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
+  if (daysAbove === 2) return { name: '상단 밴드 돌파 2일 차', alert:false, lines:[['TQQQ','2/3 매수'],['SGOV','추가 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
+  if (daysAbove === 3) return { name: '상단 밴드 돌파 3일 차', alert:false, lines:[['TQQQ','풀매수'],['SGOV','전량 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
+  return { name:`상단 밴드 위 ${daysAbove}일 차 (추세 유지)`, alert:false, lines:[['TQQQ','보유 유지'],['SPYM','추가 매수']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
+}
+
+async function yahoo(url) {
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+  if (!r.ok) throw new Error(`Yahoo ${r.status}`);
+  const j = await r.json();
+  const res = j.chart.result?.[0];
+  if (!res) throw new Error('Yahoo empty result');
+  const q = res.indicators.quote[0];
+  const closes = [], timestamps = [];
+  (q.close || []).forEach((v, i) => { if (v != null && v > 0) { closes.push(v); timestamps.push(res.timestamp[i]); } });
+  const mTime = res.meta.regularMarketTime;
+  const price = res.meta.regularMarketPrice;
+  const day = x => new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(x * 1000));
+  if (timestamps.length && day(timestamps[timestamps.length-1]) === day(mTime)) closes[closes.length-1] = price;
+  else { closes.push(price); timestamps.push(mTime); }
+  return { closes, timestamps, mTime, price };
+}
+
+function fgiRating(v) {
+  if (v >= 75) return 'Extreme Greed';
+  if (v >= 55) return 'Greed';
+  if (v >= 45) return 'Neutral';
+  if (v >= 25) return 'Fear';
+  return 'Extreme Fear';
+}
+
+async function fetchFGI() {
+  const r = await fetch(FGI_URL, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+  if (!r.ok) throw new Error(`CNN ${r.status}`);
+  const j = await r.json();
+  const data = j.fear_and_greed_historical?.data || [];
+  return data.slice(-90).map(x => ({ x: x.x ?? x.date, y: Number(x.y), rating: x.rating || fgiRating(Number(x.y)) }));
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const url = new URL(request.url);
+    if (url.pathname === '/' || url.pathname === '/health') return json({ ok:true, service:'AgiTQ API', version:'4.0' });
+    if (url.pathname !== '/api/market') return json({ error:'Not found' }, 404);
+    try {
+      const [spx, qqq, tqqq, fgi] = await Promise.all([yahoo(YAHOO.SPX), yahoo(YAHOO.QQQ), yahoo(YAHOO.TQQQ), fetchFGI()]);
+      const spxSignal = analyzeSignal(spx, tqqq, 200, 'multi', .025, .025);
+      const qqqSignal = analyzeSignal(qqq, tqqq, 200, 'single', .02, .02);
+      const latest = fgi[fgi.length-1];
+      const avg30 = fgi.slice(-30).reduce((s,d)=>s+d.y,0) / Math.max(1, Math.min(30,fgi.length));
+      return json({ version:'v4.0', updated:new Date().toISOString(), SPX:{price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal}, QQQ:{price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal}, TQQQ:{price:tqqq.price, closes:tqqq.closes, timestamps:tqqq.timestamps, mTime:tqqq.mTime}, FGI:{value:latest?.y ?? null, rating:latest?.rating ?? null, avg30, history:fgi} });
+    } catch (e) {
+      return json({ error:'market_data_failed', message:e.message }, 502);
+    }
+  }
+};
