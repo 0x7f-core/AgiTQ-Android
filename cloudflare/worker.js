@@ -1,10 +1,23 @@
 const CACHE_TTL = 300;
+
 const YAHOO = {
   SPX: 'https://query1.finance.yahoo.com/v8/finance/chart/^GSPC?range=500d&interval=1d',
   QQQ: 'https://query1.finance.yahoo.com/v8/finance/chart/QQQ?range=500d&interval=1d',
   TQQQ: 'https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?range=500d&interval=1d',
 };
-const FGI_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
+
+// CNN's Fear & Greed endpoint is an undocumented endpoint and can return
+// HTTP 418 to non-browser-looking requests. We therefore use a browser-like
+// header set and the dated/start-date form of the endpoint.
+const FGI_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2021-02-01';
+
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Origin': 'https://www.cnn.com',
+  'Referer': 'https://www.cnn.com/',
+};
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -13,10 +26,14 @@ const cors = {
   'Cache-Control': `public, max-age=${CACHE_TTL}`,
 };
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' },
+    headers: {
+      ...cors,
+      'Content-Type': 'application/json; charset=utf-8',
+      ...extraHeaders,
+    },
   });
 }
 
@@ -66,6 +83,7 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
     } else if (todayPos === 'ABOVE') {
       daysAbove++;
       if (cTqqq > localPeak) localPeak = cTqqq;
+
       let triggerTs = false;
       if (cTqqq <= localPeak * 0.75) {
         if (mode === 'single' && tsArmed) {
@@ -76,15 +94,18 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
           localPeak = cTqqq;
         }
       }
+
       isAlert = triggerTs;
       alertMsg = triggerTs ? '🚨 긴급대피 발동 (TS -25%)' : '';
       if (buyStage > 0 && buyStage <= 3) buyStage++;
     }
+
     position = todayPos;
   }
 
   const cur = tqqq.closes[tqqq.closes.length - 1];
   const dd = localPeak > 0 ? ((cur - localPeak) / localPeak) * 100 : 0;
+
   if (position === 'BELOW') return {
     name: '하단 밴드 이탈 (전량 탈출)', alert: false,
     lines: [['TQQQ·SPYM', '전량 매도'], ['SGOV', '대피 완료']],
@@ -102,19 +123,38 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
 }
 
 async function yahoo(url) {
-  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Accept': 'application/json',
+    },
+  });
   if (!r.ok) throw new Error(`Yahoo ${r.status}`);
   const j = await r.json();
   const res = j.chart.result?.[0];
   if (!res) throw new Error('Yahoo empty result');
   const q = res.indicators.quote[0];
   const closes = [], timestamps = [];
-  (q.close || []).forEach((v, i) => { if (v != null && v > 0) { closes.push(v); timestamps.push(res.timestamp[i]); } });
+  (q.close || []).forEach((v, i) => {
+    if (v != null && v > 0) {
+      closes.push(v);
+      timestamps.push(res.timestamp[i]);
+    }
+  });
+
   const mTime = res.meta.regularMarketTime;
   const price = res.meta.regularMarketPrice;
-  const day = x => new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(x * 1000));
-  if (timestamps.length && day(timestamps[timestamps.length-1]) === day(mTime)) closes[closes.length-1] = price;
-  else { closes.push(price); timestamps.push(mTime); }
+  const day = x => new Intl.DateTimeFormat('en-US', {
+    timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit'
+  }).format(new Date(x * 1000));
+
+  if (timestamps.length && day(timestamps[timestamps.length-1]) === day(mTime)) {
+    closes[closes.length-1] = price;
+  } else {
+    closes.push(price);
+    timestamps.push(mTime);
+  }
+
   return { closes, timestamps, mTime, price };
 }
 
@@ -127,26 +167,87 @@ function fgiRating(v) {
 }
 
 async function fetchFGI() {
-  const r = await fetch(FGI_URL, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+  const r = await fetch(FGI_URL, { headers: BROWSER_HEADERS });
   if (!r.ok) throw new Error(`CNN ${r.status}`);
   const j = await r.json();
+
+  // The dated endpoint normally contains historical data. Keep only the
+  // latest 90 points, matching the original Scriptable widget.
   const data = j.fear_and_greed_historical?.data || [];
-  return data.slice(-90).map(x => ({ x: x.x ?? x.date, y: Number(x.y), rating: x.rating || fgiRating(Number(x.y)) }));
+  if (data.length > 0) {
+    return data.slice(-90).map(x => ({
+      x: x.x ?? x.date,
+      y: Number(x.y),
+      rating: x.rating || fgiRating(Number(x.y)),
+    }));
+  }
+
+  // Fallback for a response that exposes only the current aggregate object.
+  const current = j.fear_and_greed;
+  if (current && Number.isFinite(Number(current.score))) {
+    return [{
+      x: current.timestamp ?? Date.now(),
+      y: Number(current.score),
+      rating: current.rating || fgiRating(Number(current.score)),
+    }];
+  }
+
+  throw new Error('CNN response format changed');
 }
 
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+
     const url = new URL(request.url);
-    if (url.pathname === '/' || url.pathname === '/health') return json({ ok:true, service:'AgiTQ API', version:'4.0' });
-    if (url.pathname !== '/api/market') return json({ error:'Not found' }, 404);
+
+    if (url.pathname === '/' || url.pathname === '/health') {
+      return json({ ok:true, service:'AgiTQ API', version:'4.1' });
+    }
+
+    if (url.pathname !== '/api/market') {
+      return json({ error:'Not found' }, 404);
+    }
+
     try {
-      const [spx, qqq, tqqq, fgi] = await Promise.all([yahoo(YAHOO.SPX), yahoo(YAHOO.QQQ), yahoo(YAHOO.TQQQ), fetchFGI()]);
+      const [spx, qqq, tqqq] = await Promise.all([
+        yahoo(YAHOO.SPX),
+        yahoo(YAHOO.QQQ),
+        yahoo(YAHOO.TQQQ),
+      ]);
+
+      // FGI is kept separate so a temporary CNN block does not take down
+      // the entire market API. This is important for Android widgets.
+      let fgi = [];
+      let fgiError = null;
+      try {
+        fgi = await fetchFGI();
+      } catch (e) {
+        fgiError = e.message;
+      }
+
       const spxSignal = analyzeSignal(spx, tqqq, 200, 'multi', .025, .025);
       const qqqSignal = analyzeSignal(qqq, tqqq, 200, 'single', .02, .02);
       const latest = fgi[fgi.length-1];
-      const avg30 = fgi.slice(-30).reduce((s,d)=>s+d.y,0) / Math.max(1, Math.min(30,fgi.length));
-      return json({ version:'v4.0', updated:new Date().toISOString(), SPX:{price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal}, QQQ:{price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal}, TQQQ:{price:tqqq.price, closes:tqqq.closes, timestamps:tqqq.timestamps, mTime:tqqq.mTime}, FGI:{value:latest?.y ?? null, rating:latest?.rating ?? null, avg30, history:fgi} });
+      const avg30 = fgi.length
+        ? fgi.slice(-30).reduce((s,d)=>s+d.y,0) / Math.min(30,fgi.length)
+        : null;
+
+      return json({
+        version:'v4.1',
+        updated:new Date().toISOString(),
+        SPX:{ price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal },
+        QQQ:{ price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal },
+        TQQQ:{ price:tqqq.price, closes:tqqq.closes, timestamps:tqqq.timestamps, mTime:tqqq.mTime },
+        FGI:{
+          value:latest?.y ?? null,
+          rating:latest?.rating ?? null,
+          avg30,
+          history:fgi,
+          available: fgi.length > 0,
+          error: fgiError,
+        },
+      });
     } catch (e) {
       return json({ error:'market_data_failed', message:e.message }, 502);
     }
