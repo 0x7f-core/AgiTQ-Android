@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AgiTQ Investor Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <header><div><h1>AgiTQ 투자 대시보드</h1><div id="updated">데이터 로딩 중...</div></div><a id="yt" href="https://www.youtube.com/@%EC%95%84%EA%B8%B0%ED%8B%B0%ED%81%90" target="_blank">YouTube</a></header>
+  <section class="grid">
+    <article class="card"><h2>아기티큐 200슨피단 (SPX)</h2><div class="price" id="spxPrice">-</div><div class="date" id="spxDate">-</div><div class="chartBox"><canvas id="spxChart"></canvas></div><div id="spxSignal"></div></article>
+    <article class="card"><h2>아기티큐 200큐큐단 (QQQ)</h2><div class="price" id="qqqPrice">-</div><div class="date" id="qqqDate">-</div><div class="chartBox"><canvas id="qqqChart"></canvas></div><div id="qqqSignal"></div></article>
+    <article class="card fgi"><h2>공포와 탐욕 지수 (CNN FGI)</h2><div class="fgiTop"><div><div class="big" id="fgiValue">-</div><div id="fgiRating">-</div><div id="fgiAvg">30일 평균 -</div></div><div class="gauge" id="gauge"></div></div><div class="chartBox"><canvas id="fgiChart"></canvas></div></article>
+  </section>
+</main>
+<script src="js/api.js"></script><script src="js/signal-engine.js"></script><script src="js/app.js"></script>
+</body></html>
