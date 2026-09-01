@@ -16,6 +16,7 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -28,135 +29,183 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-class AgiTQWidget : GlanceAppWidget() {
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = withContext(Dispatchers.IO) {
-            runCatching { AgiTQApi.load() }.getOrNull()
-        }
-        provideContent { WidgetContent(data) }
-    }
-}
-
-class AgiTQWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = AgiTQWidget()
-}
-
 private val black = ColorProvider(Color.Black)
 private val white = ColorProvider(Color.White)
 private val gray = ColorProvider(Color(0xFFAAAAAA))
 private val red = ColorProvider(Color(0xFFFF4D4D))
 private val cyan = ColorProvider(Color(0xFF80DFFF))
 
-@Composable
-private fun WidgetContent(data: JSONObject?) {
-    val size = LocalSize.current
-    val small = size.width < 180.dp
-    val medium = size.width < 310.dp
+class SpxWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        provideContent { SpxWidgetContent(loadData()) }
+    }
+}
 
-    Column(
-        modifier = GlanceModifier.fillMaxSize().background(black).padding(10.dp),
-        verticalAlignment = Alignment.Vertical.CenterVertically
-    ) {
-        when {
-            data == null -> ErrorView()
-            small -> SmallView(data)
-            medium -> MediumView(data)
-            else -> LargeView(data)
+class SpxWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = SpxWidget()
+}
+
+class QqqWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        provideContent { QqqWidgetContent(loadData()) }
+    }
+}
+
+class QqqWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = QqqWidget()
+}
+
+class FgiWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        provideContent { FgiWidgetContent(loadData()) }
+    }
+}
+
+class FgiWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = FgiWidget()
+}
+
+private suspend fun loadData(): JSONObject? = withContext(Dispatchers.IO) {
+    runCatching { AgiTQApi.load() }.getOrNull()
+}
+
+@Composable
+private fun SpxWidgetContent(data: JSONObject?) {
+    val size = LocalSize.current
+    val spx = data?.optJSONObject("SPX")
+    val sig = spx?.optJSONObject("signal")
+    val price = spx?.optDouble("price", 0.0) ?: 0.0
+    val sma = sig?.optDouble("sma", 0.0) ?: 0.0
+    val dd = sig?.optDouble("drawdown", 0.0) ?: 0.0
+    val compact = size.width < 220.dp
+
+    WidgetShell {
+        if (data == null || spx == null) {
+            ErrorView()
+        } else if (compact) {
+            Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
+                Text("SPX", style = TextStyle(color = gray, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                Text(formatPrice(price), style = TextStyle(color = cyan, fontSize = 25.sp, fontWeight = FontWeight.Bold))
+                Text("200SMA ${formatPrice(sma)}", style = TextStyle(color = gray, fontSize = 9.sp))
+            }
+        } else {
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                Text("아기티큐 200슨피단", style = TextStyle(color = white, fontSize = 14.sp, fontWeight = FontWeight.Bold))
+                Spacer(GlanceModifier.height(4.dp))
+                Row(modifier = GlanceModifier.fillMaxWidth()) {
+                    Column(modifier = GlanceModifier.defaultWeight()) {
+                        Text("SPX", style = TextStyle(color = cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                        Text(formatPrice(price), style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
+                    }
+                    Column(horizontalAlignment = Alignment.Horizontal.End) {
+                        Text("200SMA", style = TextStyle(color = gray, fontSize = 9.sp))
+                        Text(formatPrice(sma), style = TextStyle(color = gray, fontSize = 11.sp))
+                    }
+                }
+                Spacer(GlanceModifier.height(4.dp))
+                Text(sig?.optString("name", "-") ?: "-", style = TextStyle(color = if (sig?.optBoolean("alert") == true) red else gray, fontSize = 10.sp))
+                Text(signalSummary(sig), style = TextStyle(color = white, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                Text("최고점 대비 ${formatPercent(dd)}", style = TextStyle(color = gray, fontSize = 9.sp))
+            }
         }
     }
+}
+
+@Composable
+private fun QqqWidgetContent(data: JSONObject?) {
+    val size = LocalSize.current
+    val qqq = data?.optJSONObject("QQQ")
+    val sig = qqq?.optJSONObject("signal")
+    val price = qqq?.optDouble("price", 0.0) ?: 0.0
+    val sma = sig?.optDouble("sma", 0.0) ?: 0.0
+    val dd = sig?.optDouble("drawdown", 0.0) ?: 0.0
+    val compact = size.width < 220.dp
+
+    WidgetShell {
+        if (data == null || qqq == null) {
+            ErrorView()
+        } else if (compact) {
+            Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
+                Text("QQQ", style = TextStyle(color = gray, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                Text(formatPrice(price), style = TextStyle(color = cyan, fontSize = 25.sp, fontWeight = FontWeight.Bold))
+                Text("200SMA ${formatPrice(sma)}", style = TextStyle(color = gray, fontSize = 9.sp))
+            }
+        } else {
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                Text("아기티큐 200큐큐단", style = TextStyle(color = white, fontSize = 14.sp, fontWeight = FontWeight.Bold))
+                Spacer(GlanceModifier.height(4.dp))
+                Row(modifier = GlanceModifier.fillMaxWidth()) {
+                    Column(modifier = GlanceModifier.defaultWeight()) {
+                        Text("QQQ", style = TextStyle(color = cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                        Text(formatPrice(price), style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
+                    }
+                    Column(horizontalAlignment = Alignment.Horizontal.End) {
+                        Text("200SMA", style = TextStyle(color = gray, fontSize = 9.sp))
+                        Text(formatPrice(sma), style = TextStyle(color = gray, fontSize = 11.sp))
+                    }
+                }
+                Spacer(GlanceModifier.height(4.dp))
+                Text(sig?.optString("name", "-") ?: "-", style = TextStyle(color = if (sig?.optBoolean("alert") == true) red else gray, fontSize = 10.sp))
+                Text(signalSummary(sig), style = TextStyle(color = white, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                Text("최고점 대비 ${formatPercent(dd)}", style = TextStyle(color = gray, fontSize = 9.sp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FgiWidgetContent(data: JSONObject?) {
+    val size = LocalSize.current
+    val fgi = data?.optJSONObject("FGI")
+    val value = fgi?.optDouble("value", 0.0) ?: 0.0
+    val avg30 = fgi?.optDouble("avg30", 0.0) ?: 0.0
+    val compact = size.width < 220.dp
+
+    WidgetShell {
+        if (data == null || fgi == null) {
+            ErrorView()
+        } else {
+            Column(
+                modifier = GlanceModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.Horizontal.CenterHorizontally
+            ) {
+                Text("공포·탐욕 지수", style = TextStyle(color = white, fontSize = if (compact) 12.sp else 14.sp, fontWeight = FontWeight.Bold))
+                Spacer(GlanceModifier.height(3.dp))
+                Text(value.toInt().toString(), style = TextStyle(color = fgiColor(value), fontSize = if (compact) 30.sp else 34.sp, fontWeight = FontWeight.Bold))
+                Text(fgiRatingKo(fgi.optString("rating")), style = TextStyle(color = fgiColor(value), fontSize = 12.sp, fontWeight = FontWeight.Bold))
+                if (!compact) {
+                    Spacer(GlanceModifier.height(5.dp))
+                    Text(fgiBar(value), style = TextStyle(color = fgiColor(value), fontSize = 9.sp))
+                    Text("30일 평균 ${avg30.toInt()}", style = TextStyle(color = gray, fontSize = 9.sp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WidgetShell(content: @Composable () -> Unit) {
+    Column(
+        modifier = GlanceModifier.fillMaxSize().background(black).padding(10.dp),
+        verticalAlignment = Alignment.Vertical.CenterVertically,
+        horizontalAlignment = Alignment.Horizontal.CenterHorizontally
+    ) { content() }
 }
 
 @Composable
 private fun ErrorView() {
-    Text(
-        "AgiTQ\n데이터 로드 실패",
-        style = TextStyle(color = red, fontWeight = FontWeight.Bold)
-    )
+    Text("AgiTQ\n데이터 로드 실패", style = TextStyle(color = red, fontWeight = FontWeight.Bold, fontSize = 11.sp))
 }
 
-@Composable
-private fun SmallView(data: JSONObject) {
-    val fgi = data.optJSONObject("FGI") ?: JSONObject()
-    val value = fgi.optDouble("value", 0.0)
-
-    Column(
-        modifier = GlanceModifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
-        verticalAlignment = Alignment.Vertical.CenterVertically
-    ) {
-        Text("공포·탐욕 지수", style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp))
-        Spacer(GlanceModifier.height(3.dp))
-        Text("${value.toInt()}", style = TextStyle(color = fgiColor(value), fontWeight = FontWeight.Bold, fontSize = 30.sp))
-        Text(fgiRatingKo(fgi.optString("rating")), style = TextStyle(color = fgiColor(value), fontWeight = FontWeight.Bold, fontSize = 11.sp))
-    }
-}
-
-@Composable
-private fun MediumView(data: JSONObject) {
-    val qqq = data.optJSONObject("QQQ") ?: JSONObject()
-    val sig = qqq.optJSONObject("signal") ?: JSONObject()
-    val price = qqq.optDouble("price", 0.0)
-    val sma = sig.optDouble("sma", 0.0)
-    val dd = sig.optDouble("drawdown", 0.0)
-
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-        Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                Text("아기티큐 200큐큐단", style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 13.sp))
-                Text("QQQ", style = TextStyle(color = cyan, fontWeight = FontWeight.Bold, fontSize = 10.sp))
-            }
-            Column(horizontalAlignment = Alignment.Horizontal.End) {
-                Text(formatPrice(price), style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 19.sp))
-                Text("200SMA ${formatPrice(sma)}", style = TextStyle(color = gray, fontSize = 8.sp))
-            }
-        }
-        Spacer(GlanceModifier.height(5.dp))
-        Text(sig.optString("name", "-"), style = TextStyle(color = if (sig.optBoolean("alert")) red else gray, fontSize = 10.sp))
-        Spacer(GlanceModifier.height(2.dp))
-        Text(signalSummary(sig), style = TextStyle(color = white, fontSize = 11.sp, fontWeight = FontWeight.Bold))
-        Text("TQQQ 최고점 대비 ${formatPercent(dd)}", style = TextStyle(color = gray, fontSize = 9.sp))
-    }
-}
-
-@Composable
-private fun LargeView(data: JSONObject) {
-    val spx = data.optJSONObject("SPX") ?: JSONObject()
-    val fgi = data.optJSONObject("FGI") ?: JSONObject()
-    val spxSig = spx.optJSONObject("signal") ?: JSONObject()
-    val qqq = data.optJSONObject("QQQ") ?: JSONObject()
-    val value = fgi.optDouble("value", 0.0)
-
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-        Text("아기티큐 200슨피단 (SPX)", style = TextStyle(color = white, fontWeight = FontWeight.Bold, fontSize = 14.sp))
-        Spacer(GlanceModifier.height(2.dp))
-        Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                Text(formatPrice(spx.optDouble("price", 0.0)), style = TextStyle(color = cyan, fontWeight = FontWeight.Bold, fontSize = 23.sp))
-                Text("200SMA ${formatPrice(spxSig.optDouble("sma", 0.0))}", style = TextStyle(color = gray, fontSize = 8.sp))
-            }
-            Column(horizontalAlignment = Alignment.Horizontal.End) {
-                Text(value.toInt().toString(), style = TextStyle(color = fgiColor(value), fontWeight = FontWeight.Bold, fontSize = 21.sp))
-                Text("FGI ${fgiRatingKo(fgi.optString("rating"))}", style = TextStyle(color = fgiColor(value), fontSize = 8.sp))
-            }
-        }
-        Spacer(GlanceModifier.height(5.dp))
-        Text(spxSig.optString("name", "-"), style = TextStyle(color = if (spxSig.optBoolean("alert")) red else gray, fontSize = 9.sp))
-        Text(signalSummary(spxSig), style = TextStyle(color = white, fontSize = 11.sp, fontWeight = FontWeight.Bold))
-        Text("SPX TQQQ DD ${formatPercent(spxSig.optDouble("drawdown", 0.0))} · QQQ ${formatPrice(qqq.optDouble("price", 0.0))}", style = TextStyle(color = gray, fontSize = 8.sp))
-        Spacer(GlanceModifier.height(2.dp))
-        Text(fgiBar(value), style = TextStyle(color = fgiColor(value), fontSize = 8.sp))
-        Text("FGI 30일 평균 ${fgi.optDouble("avg30", 0.0).toInt()}", style = TextStyle(color = gray, fontSize = 8.sp))
-    }
-}
-
-private fun signalSummary(sig: JSONObject): String {
-    val lines = sig.optJSONArray("lines") ?: return ""
+private fun signalSummary(sig: JSONObject?): String {
+    if (sig == null) return "-"
+    val lines = sig.optJSONArray("lines") ?: return "-"
     val parts = mutableListOf<String>()
     for (i in 0 until lines.length()) {
         val row = lines.optJSONArray(i) ?: continue
         parts += "${row.optString(0)} ${row.optString(1)}"
     }
-    return parts.joinToString(" · ")
+    return parts.joinToString(" · ").ifBlank { "-" }
 }
 
 private fun formatPrice(value: Double): String =
