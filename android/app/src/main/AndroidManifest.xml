@@ -3,12 +3,24 @@
     <application android:name=".AgiTQApp" android:theme="@style/AppTheme" android:label="AgiTQ">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <receiver android:name=".AgiTQWidgetReceiver" android:exported="true">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_info"/>
+
+        <receiver android:name=".SpxWidgetReceiver" android:exported="true" android:label="AgiTQ SPX">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_spx_info" />
+        </receiver>
+
+        <receiver android:name=".QqqWidgetReceiver" android:exported="true" android:label="AgiTQ QQQ">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_qqq_info" />
+        </receiver>
+
+        <receiver android:name=".FgiWidgetReceiver" android:exported="true" android:label="AgiTQ FGI">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_fgi_info" />
         </receiver>
     </application>
 </manifest>
