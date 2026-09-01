@@ -12,8 +12,8 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "4.2"
+        versionCode = 4
+        versionName = "4.3"
     }
 
     buildTypes {
