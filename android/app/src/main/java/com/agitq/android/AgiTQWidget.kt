@@ -154,6 +154,13 @@ private fun ResponsiveFullCard(
         }
     } ?: errorCardBitmap(bitmapW, bitmapH)
 
+    val minSideDp = min(glanceSize.width.value, glanceSize.height.value)
+    val refreshButtonSize = when {
+        minSideDp < 110f -> 44.dp
+        minSideDp < 160f -> 50.dp
+        else -> 54.dp
+    }
+
     Box(
         modifier = GlanceModifier.fillMaxSize(),
         contentAlignment = Alignment.BottomEnd
@@ -171,8 +178,8 @@ private fun ResponsiveFullCard(
             provider = ImageProvider(R.drawable.ic_widget_refresh),
             contentDescription = "새로고침",
             modifier = GlanceModifier
-                .size(42.dp)
-                .padding(8.dp)
+                .size(refreshButtonSize)
+                .padding(2.dp)
                 .clickable(
                     actionRunCallback<RefreshWidgetAction>(
                         actionParametersOf(RefreshKindKey to kind.name)
