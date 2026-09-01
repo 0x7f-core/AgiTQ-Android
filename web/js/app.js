@@ -1,193 +1,294 @@
 const C = {
+  p1: '#FFFFFF',
+  p2: '#AAAAAA',
+  dot: '#666666',
+  tqqq: '#e8714f',
+  spym: '#b07cc0',
+  sgov: '#5bb8e8',
   cp: '#80dfff',
-  up: '#e070c0',
-  dn: '#afd485',
-  alert: '#ff4d4d'
+  upperBand: '#e070c0',
+  lowerBand: '#afd485',
+  alert: '#ff4d4d',
+  extremeFear: '#e8714f',
+  fear: '#f0a0a0',
+  neutral: '#AAAAAA',
+  greed: '#5bb8e8',
+  extremeGreed: '#b07cc0'
 };
 
-let charts = {};
-
-function fmt(n) {
-  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+function getHDContext(canvasId, W, H) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.aspectRatio = `${W}/${H}`;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return ctx;
 }
 
-function rating(v) {
-  return v >= 75 ? '극탐욕 (Extreme Greed)' :
-         v >= 55 ? '탐욕 (Greed)' :
-         v >= 45 ? '중립 (Neutral)' :
-         v >= 25 ? '공포 (Fear)' :
-                    '극공포 (Extreme Fear)';
+function sma(data, period) {
+  const out = new Array(data.length).fill(NaN);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += Number(data[i]);
+    if (i >= period) sum -= Number(data[i - period]);
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
 }
 
-function makeChart(id, labels, price, up, dn) {
-  charts[id]?.destroy();
-  charts[id] = new Chart(document.getElementById(id), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Price', data: price, borderColor: C.cp, borderWidth: 2, pointRadius: 0, spanGaps: true, tension: 0.15 },
-        { label: 'Upper', data: up, borderColor: C.up, borderWidth: 1.5, pointRadius: 0, spanGaps: true, tension: 0.15 },
-        { label: 'Lower', data: dn, borderColor: C.dn, borderWidth: 1.5, pointRadius: 0, spanGaps: true, tension: 0.15 }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { mode: 'index', intersect: false }
-      },
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        x: { display: false },
-        y: {
-          ticks: { color: '#aaa' },
-          grid: { color: '#222' },
-          border: { display: false }
-        }
+function etfClass(token) {
+  if (token.includes('TQQQ')) return 'token-tqqq';
+  if (token.includes('SPYM')) return 'token-spym';
+  if (token.includes('SGOV')) return 'token-sgov';
+  return '';
+}
+
+function fgiColor(v) {
+  if (v >= 75) return C.extremeGreed;
+  if (v >= 55) return C.greed;
+  if (v >= 45) return C.neutral;
+  if (v >= 25) return C.fear;
+  return C.extremeFear;
+}
+
+function translateRating(rating) {
+  const map = {
+    'extreme fear': '극공포 (Extreme Fear)',
+    'fear': '공포 (Fear)',
+    'neutral': '중립 (Neutral)',
+    'greed': '탐욕 (Greed)',
+    'extreme greed': '극탐욕 (Extreme Greed)'
+  };
+  return map[String(rating || '').toLowerCase()] || rating || '-';
+}
+
+function formatMarketTime(epochSeconds) {
+  if (!epochSeconds) return '-';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: '2-digit', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(Number(epochSeconds) * 1000));
+  const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 기준`;
+}
+
+// Original Scriptable drawBandChart: 90 points, upper/lower band and current price only.
+function drawBandChart(canvasId, closes, upB, dnB) {
+  const W = 500, H = 300;
+  const ctx = getHDContext(canvasId, W, H);
+  if (!ctx || !Array.isArray(closes) || closes.length < 200) return;
+
+  const moving = sma(closes, 200);
+  const SIZE = Math.min(90, closes.length);
+  const pSet = closes.slice(-SIZE).map(Number);
+  const sSet = moving.slice(-SIZE);
+  const uSet = sSet.map(v => Number.isFinite(v) ? v * (1 + upB) : NaN);
+  const lSet = sSet.map(v => Number.isFinite(v) ? v * (1 - dnB) : NaN);
+
+  const all = pSet.concat(uSet, lSet).filter(Number.isFinite);
+  if (!all.length) return;
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const range = (max - min) || 1;
+
+  const trans = (v, i) => ({
+    x: 15 + (i / Math.max(1, SIZE - 1)) * 470,
+    y: 285 - ((v - min) / range) * 270
+  });
+
+  const plot = (data, color, width) => {
+    ctx.beginPath();
+    let started = false;
+    data.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      const pt = trans(v, i);
+      if (!started) {
+        ctx.moveTo(pt.x, pt.y);
+        started = true;
+      } else {
+        ctx.lineTo(pt.x, pt.y);
       }
-    }
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  };
+
+  plot(uSet, C.upperBand, 3);
+  plot(lSet, C.lowerBand, 3);
+  plot(pSet, C.cp, 5);
+}
+
+function drawFGIChart(canvasId, data) {
+  const W = 480, H = 300;
+  const ctx = getHDContext(canvasId, W, H);
+  if (!ctx || !Array.isArray(data) || data.length < 2) return;
+
+  const values = data.slice(-90).map(d => Number(d.y)).filter(Number.isFinite);
+  if (values.length < 2) return;
+
+  const PAD_L = 8, PAD_R = 8, PAD_T = 12, PAD_B = 12;
+  const usableW = W - PAD_L - PAD_R;
+  const usableH = H - PAD_T - PAD_B;
+  const toY = v => PAD_T + (1 - v / 100) * usableH;
+  const toX = i => PAD_L + (i / (values.length - 1)) * usableW;
+
+  ctx.strokeStyle = 'rgba(170,170,170,.20)';
+  ctx.lineWidth = 1;
+  [25, 50, 75].forEach(level => {
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, toY(level));
+    ctx.lineTo(W - PAD_R, toY(level));
+    ctx.stroke();
+  });
+
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    if (i === 0) ctx.moveTo(toX(i), toY(v));
+    else ctx.lineTo(toX(i), toY(v));
+  });
+  ctx.strokeStyle = 'rgba(255,255,255,.40)';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  values.forEach((v, i) => {
+    ctx.fillStyle = fgiColor(v);
+    ctx.beginPath();
+    ctx.arc(toX(i), toY(v), 4, 0, Math.PI * 2);
+    ctx.fill();
   });
 }
 
-function renderSignal(el, s) {
-  const position = s.position ?? s.pos ?? 'BELOW';
-  const days = Number(s.daysAbove ?? s.days ?? 0);
-  const drawdown = s.drawdown ?? s.dd ?? null;
-  const isAlert = Boolean(s.alert);
+function drawGauge(canvasId, value) {
+  const W = 320, H = 180;
+  const ctx = getHDContext(canvasId, W, H);
+  if (!ctx) return;
 
-  let name;
-  let lines;
+  const val = Math.max(0, Math.min(100, Number(value)));
+  const cx = W / 2, cy = H - 20, radius = 120, arcThick = 10;
 
-  if (position === 'BELOW') {
-    name = '하단 밴드 이탈 (전량 탈출)';
-    lines = [['TQQQ·SPYM', '전량 매도'], ['SGOV', '대피 완료']];
-  } else if (isAlert) {
-    name = '🚨 긴급대피 발동 (TS -25%)';
-    lines = [['TQQQ', '절반 매도'], ['SPYM', '즉시 전환']];
-  } else if (days === 1) {
-    name = '상단 밴드 돌파 1일 차';
-    lines = [['TQQQ', '1/3 매수'], ['SGOV', '일부 매도']];
-  } else if (days === 2) {
-    name = '상단 밴드 돌파 2일 차';
-    lines = [['TQQQ', '2/3 매수'], ['SGOV', '추가 매도']];
-  } else if (days === 3) {
-    name = '상단 밴드 돌파 3일 차';
-    lines = [['TQQQ', '풀매수'], ['SGOV', '전량 매도']];
-  } else {
-    name = `상단 밴드 위 ${days}일 차 (추세 유지)`;
-    lines = [['TQQQ', '보유 유지'], ['SPYM', '추가 매수']];
+  for (let i = 0; i < 120; i++) {
+    const t = i / 119;
+    const angle = Math.PI + t * Math.PI;
+    ctx.fillStyle = fgiColor(t * 100);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, arcThick / 2, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  const ddText = position === 'ABOVE' && Number.isFinite(Number(drawdown))
-    ? `TQQQ 최고점 대비 ${Number(drawdown).toFixed(1)}%`
+  const needleAngle = Math.PI + (val / 100) * Math.PI;
+  const needleLen = radius - 8;
+  ctx.fillStyle = C.p1;
+  for (let i = 0; i < 35; i++) {
+    const t = i / 34;
+    const nx = cx + Math.cos(needleAngle) * needleLen * t;
+    const ny = cy + Math.sin(needleAngle) * needleLen * t;
+    const thick = 12 * (1 - t);
+    ctx.beginPath();
+    ctx.arc(nx, ny, Math.max(.5, thick / 2), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  const labelDist = radius + 22;
+  const lx = cx + Math.cos(needleAngle) * labelDist;
+  const ly = cy + Math.sin(needleAngle) * labelDist;
+  ctx.fillStyle = C.p1;
+  ctx.font = '700 22px -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(val.toFixed(0), lx, ly);
+}
+
+function tokenMarkup(token, isAlert) {
+  if (isAlert) return `<span class="token-alert">${token}</span>`;
+  if (token.includes('·')) {
+    return token.split('·').map(part => `<span class="${etfClass(part)}">${part}</span>`).join('<span class="token-dot">·</span>');
+  }
+  return `<span class="${etfClass(token)}">${token}</span>`;
+}
+
+function renderSignal(containerId, sig) {
+  const el = document.getElementById(containerId);
+  if (!el || !sig) return;
+
+  const isAlert = Boolean(sig.alert);
+  const rows = (sig.lines || []).slice(0, 2).map(row => {
+    const token = row?.[0] ?? '';
+    const action = row?.[1] ?? '';
+    if (isAlert) return `<div class="sig-row"><span class="token-alert">${token} ${action}</span></div>`;
+    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action">${action}</span></div>`;
+  }).join('');
+
+  const drawdown = Number(sig.drawdown);
+  const dd = sig.position === 'ABOVE' && Number.isFinite(drawdown)
+    ? `TQQQ 최고점 대비 ${drawdown.toFixed(1)}%`
     : 'TQQQ 최고점 대비 N/A';
 
-  el.innerHTML = `
-    <div class="signal ${isAlert ? 'alert' : ''}">
-      ${lines.map(([token, action]) => `
-        <div class="line"><span class="token">${token}</span><span>${action}</span></div>
-      `).join('')}
-      <div>${name}</div>
-      <div>${ddText}</div>
-    </div>
-  `;
+  el.innerHTML = `${rows}
+    <div class="status-text" style="color:${isAlert ? C.alert : 'var(--status)'}">${sig.name || '-'}</div>
+    <div class="dd-text">${dd}</div>`;
 }
 
-function chartData(closes, period, upPct, dnPct) {
-  const ma = sma(closes, period);
-  const p = closes.slice(-90);
-  const m = ma.slice(-90);
-  return {
-    p,
-    up: m.map(v => v == null ? null : v * (1 + upPct)),
-    dn: m.map(v => v == null ? null : v * (1 - dnPct))
-  };
+function renderFGI(fgi) {
+  const ratingEl = document.getElementById('fgi-rating-text');
+  const statsEl = document.getElementById('fgi-stats-text');
+
+  if (!fgi || fgi.available === false || !Number.isFinite(Number(fgi.value))) {
+    ratingEl.textContent = 'FGI 데이터 없음';
+    ratingEl.style.color = C.p2;
+    statsEl.textContent = '';
+    return;
+  }
+
+  const value = Number(fgi.value);
+  const avg30 = Number(fgi.avg30);
+  drawFGIChart('fgiHistoryChart', fgi.history || []);
+  drawGauge('fgiGauge', value);
+
+  ratingEl.textContent = translateRating(fgi.rating);
+  ratingEl.style.color = fgiColor(value);
+
+  const avgText = Number.isFinite(avg30) ? avg30.toFixed(0) : '-';
+  const avgColor = Number.isFinite(avg30) ? fgiColor(avg30) : C.p2;
+  statsEl.innerHTML = `
+    <span style="color:${fgiColor(value)}">현재 ${value.toFixed(0)}</span>
+    <span class="fgi-slash"> / </span>
+    <span style="color:${avgColor}">30일 평균 ${avgText}</span>`;
 }
 
-function renderGauge(v) {
-  const g = document.getElementById('gauge');
-  if (!g) return;
-  const pct = Math.max(0, Math.min(100, Number(v)));
-  g.innerHTML = `
-    <div class="gaugeArc">
-      <div class="gaugeNeedle" style="transform:rotate(${(-90 + pct * 1.8).toFixed(1)}deg)"></div>
-      <div class="gaugeValue">${pct.toFixed(0)}</div>
-    </div>
-    <div class="gaugeScale"><span>0 극공포</span><span>50 중립</span><span>100 극탐욕</span></div>
-  `;
-}
+async function renderDashboard() {
+  const errorEl = document.getElementById('error-text');
+  errorEl.textContent = '';
 
-async function main() {
   try {
-    const d = await getMarket();
+    const data = await getMarket();
+    document.getElementById('spx-updated').textContent = formatMarketTime(data.SPX?.mTime);
+    document.getElementById('qqq-updated').textContent = formatMarketTime(data.QQQ?.mTime);
 
-    document.getElementById('updated').textContent =
-      '업데이트: ' + new Date(d.updated).toLocaleString('ko-KR');
-
-    document.getElementById('spxPrice').textContent = fmt(d.SPX.price);
-    document.getElementById('qqqPrice').textContent = fmt(d.QQQ.price);
-    document.getElementById('spxDate').textContent = new Date(d.SPX.mTime * 1000).toLocaleString('ko-KR');
-    document.getElementById('qqqDate').textContent = new Date(d.QQQ.mTime * 1000).toLocaleString('ko-KR');
-
-    const a = chartData(d.SPX.closes, 200, 0.025, 0.025);
-    const b = chartData(d.QQQ.closes, 200, 0.02, 0.02);
-
-    makeChart('spxChart', a.p.map((_, i) => i), a.p, a.up, a.dn);
-    makeChart('qqqChart', b.p.map((_, i) => i), b.p, b.up, b.dn);
-
-    renderSignal(document.getElementById('spxSignal'), d.SPX.signal);
-    renderSignal(document.getElementById('qqqSignal'), d.QQQ.signal);
-
-    if (d.FGI && d.FGI.available !== false && Number.isFinite(Number(d.FGI.value))) {
-      const v = Number(d.FGI.value);
-      document.getElementById('fgiValue').textContent = v.toFixed(0);
-      document.getElementById('fgiRating').textContent = rating(v);
-      document.getElementById('fgiAvg').textContent = '30일 평균 ' + Number(d.FGI.avg30).toFixed(0);
-      renderGauge(v);
-
-      charts.fgi?.destroy();
-      charts.fgi = new Chart(document.getElementById('fgiChart'), {
-        type: 'line',
-        data: {
-          labels: d.FGI.history.map(x => x.x),
-          datasets: [{
-            data: d.FGI.history.map(x => x.y),
-            borderColor: '#fff',
-            pointRadius: 2,
-            borderWidth: 1,
-            spanGaps: true,
-            tension: 0.15
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: { mode: 'index', intersect: false }
-          },
-          scales: {
-            y: { min: 0, max: 100, ticks: { color: '#aaa' }, grid: { color: '#222' } },
-            x: { display: false }
-          }
-        }
-      });
-    } else {
-      document.getElementById('fgiValue').textContent = '-';
-      document.getElementById('fgiRating').textContent = 'FGI 데이터 없음';
-      document.getElementById('fgiAvg').textContent = '30일 평균 -';
-      const fgiCanvas = document.getElementById('fgiChart');
-      if (fgiCanvas && charts.fgi) { charts.fgi.destroy(); charts.fgi = null; }
-    }
-  } catch (e) {
-    console.error(e);
-    document.getElementById('updated').textContent = 'API 오류: ' + (e?.message ?? String(e));
+    drawBandChart('spxChart', data.SPX?.closes || [], .025, .025);
+    drawBandChart('qqqChart', data.QQQ?.closes || [], .02, .02);
+    renderSignal('spx-info', data.SPX?.signal);
+    renderSignal('qqq-info', data.QQQ?.signal);
+    renderFGI(data.FGI);
+  } catch (error) {
+    console.error(error);
+    errorEl.textContent = `데이터 연결 오류: ${error?.message || error}`;
   }
 }
 
-main();
-setInterval(main, 300000);
+renderDashboard();
+setInterval(renderDashboard, 300000);
