@@ -1,20 +1,54 @@
-<!doctype html>
-<html lang="ko">
+<!DOCTYPE html>
+<html lang="ko" style="background:#000">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AgiTQ Investor Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>A Godly Investor's True Quest</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<main class="wrap">
-  <header><div><h1>AgiTQ 투자 대시보드</h1><div id="updated">데이터 로딩 중...</div></div><a id="yt" href="https://www.youtube.com/@%EC%95%84%EA%B8%B0%ED%8B%B0%ED%81%90" target="_blank">YouTube</a></header>
-  <section class="grid">
-    <article class="card"><h2>아기티큐 200슨피단 (SPX)</h2><div class="price" id="spxPrice">-</div><div class="date" id="spxDate">-</div><div class="chartBox"><canvas id="spxChart"></canvas></div><div id="spxSignal"></div></article>
-    <article class="card"><h2>아기티큐 200큐큐단 (QQQ)</h2><div class="price" id="qqqPrice">-</div><div class="date" id="qqqDate">-</div><div class="chartBox"><canvas id="qqqChart"></canvas></div><div id="qqqSignal"></div></article>
-    <article class="card fgi"><h2>공포와 탐욕 지수 (CNN FGI)</h2><div class="fgiTop"><div><div class="big" id="fgiValue">-</div><div id="fgiRating">-</div><div id="fgiAvg">30일 평균 -</div></div><div class="gauge" id="gauge"></div></div><div class="chartBox"><canvas id="fgiChart"></canvas></div></article>
-  </section>
-</main>
-<script src="js/api.js"></script><script src="js/signal-engine.js"></script><script src="js/app.js"></script>
-</body></html>
+  <main class="widget-container">
+    <section class="card market-card" id="card-spx">
+      <div class="card-header">
+        <a class="title" href="https://www.youtube.com/@%EC%95%84%EA%B8%B0%ED%8B%B0%ED%81%90" target="_blank" rel="noopener">아기티큐 200슨피단 (SPX)</a>
+        <div class="version">v3.0-γ (26.08.12)</div>
+      </div>
+      <div class="updated-time" id="spx-updated">데이터 로딩 중...</div>
+      <div class="content-row">
+        <div class="chart-box"><canvas id="spxChart"></canvas></div>
+        <div class="info-box" id="spx-info"></div>
+      </div>
+    </section>
+
+    <section class="card market-card" id="card-qqq">
+      <div class="card-header">
+        <a class="title" href="https://www.youtube.com/@%EC%95%84%EA%B8%B0%ED%8B%B0%ED%81%90" target="_blank" rel="noopener">아기티큐 200큐큐단 (QQQ)</a>
+        <div class="version">v3.0-γ (26.08.12)</div>
+      </div>
+      <div class="updated-time" id="qqq-updated">데이터 로딩 중...</div>
+      <div class="content-row">
+        <div class="chart-box"><canvas id="qqqChart"></canvas></div>
+        <div class="info-box" id="qqq-info"></div>
+      </div>
+    </section>
+
+    <section class="card fgi-card" id="card-fgi">
+      <a class="fgi-header" href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener">공포와 탐욕 지수 (CNN FGI)</a>
+      <div class="content-row fgi-row">
+        <div class="chart-box fgi-chart-box"><canvas id="fgiHistoryChart"></canvas></div>
+        <div class="fgi-info-box">
+          <canvas id="fgiGauge"></canvas>
+          <div class="fgi-rating" id="fgi-rating-text">-</div>
+          <div class="fgi-stats" id="fgi-stats-text"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="error-text" id="error-text" aria-live="polite"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
