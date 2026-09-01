@@ -3,10 +3,10 @@
     <!-- Exact visible 28dp button. No transparent outer canvas. -->
     <item android:drawable="@drawable/bg_refresh_circle" />
 
-    <!-- Same icon proportions as the original 200SPX button. -->
+    <!-- Slightly smaller inner arrow for more breathing room inside the 28dp circle. -->
     <item
-        android:width="18dp"
-        android:height="18dp"
+        android:width="16dp"
+        android:height="16dp"
         android:gravity="center"
         android:drawable="@drawable/ic_refresh" />
 </layer-list>
