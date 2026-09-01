@@ -16,6 +16,15 @@ android {
         versionName = "4.0"
     }
 
+    buildTypes {
+        getByName("release") {
+            // Sign the release APK with Android's standard debug key so the
+            // GitHub Actions artifact can be installed directly on a device.
+            // This is suitable for personal/testing distribution, not Play Store publishing.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
