@@ -258,15 +258,13 @@ private fun marketCardBitmap(
             drawMarketChartScriptable(canvas, asset, bandPct, chartArea)
 
             val signalX = width * 0.56f
-            // 웹의 info-box처럼 네 문단 묶음의 시각적 중심을 차트 중심에 맞춘다.
-            // v4.21 실기기 캡처 기준 약 46px 아래로 이동하며 wide 배치에만 적용된다.
-            val signalTop = contentTop + (bottom - contentTop) * 0.225f
             val signalWidth = width - signalX - pad
             drawSignalBlockResponsive(
                 canvas = canvas,
                 sig = sig,
                 x = signalX,
-                top = signalTop,
+                top = contentTop,
+                verticalCenter = chartArea.centerY(),
                 maxWidth = signalWidth,
                 short = short,
                 densityFactor = 1f,
@@ -404,6 +402,7 @@ private fun drawSignalBlockResponsive(
     sig: JSONObject?,
     x: Float,
     top: Float,
+    verticalCenter: Float? = null,
     maxWidth: Float,
     short: Float,
     densityFactor: Float,
@@ -418,7 +417,13 @@ private fun drawSignalBlockResponsive(
         minimumRowSize
     )
     val rowGap = rowSize * 1.62f
-    var y = top + rowSize
+    val rowCount = if (lines == null) 0 else {
+        (0 until min(lines.length(), 2)).count { lines.optJSONArray(it) != null }
+    }
+    val blockTop = verticalCenter?.let { center ->
+        center - signalBlockCenterOffset(rowSize, rowGap, rowCount, drawdownBold)
+    } ?: top
+    var y = blockTop + rowSize
 
     if (lines != null) {
         for (i in 0 until min(lines.length(), 2)) {
@@ -472,6 +477,30 @@ private fun drawSignalBlockResponsive(
             maxWidth
         )
     }
+}
+
+/** 네 문단의 실제 글꼴 경계를 기준으로 계산한 묶음 중심 위치. */
+private fun signalBlockCenterOffset(
+    rowSize: Float,
+    rowGap: Float,
+    rowCount: Int,
+    drawdownBold: Boolean
+): Float {
+    val statusSize = rowSize * 0.72f
+    val firstTop = if (rowCount > 0) {
+        rowSize + textPaint(rowSize, COLOR_WHITE, true).fontMetrics.top
+    } else {
+        rowSize * 1.30f + textPaint(statusSize, COLOR_P2, false).fontMetrics.top
+    }
+
+    val drawdownSize = rowSize * if (drawdownBold) 0.76f else 0.78f
+    val drawdownBaseline = rowSize + rowGap * rowCount + rowSize * 0.30f + rowSize * 1.48f
+    val drawdownBottom = drawdownBaseline + if (drawdownBold) {
+        textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics.bottom
+    } else {
+        mediumTextPaint(drawdownSize, COLOR_WHITE).fontMetrics.bottom
+    }
+    return (firstTop + drawdownBottom) / 2f
 }
 
 private fun drawSignalRow(
