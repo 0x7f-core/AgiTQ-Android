@@ -136,16 +136,20 @@ private fun ResponsiveFullCard(
     val aspect = (glanceSize.width.value / glanceSize.height.value)
         .coerceIn(0.35f, 4.0f)
     val (bitmapW, bitmapH) = bitmapDimensions(aspect)
+    val canvasUnitsPerDp = min(
+        bitmapW / glanceSize.width.value.coerceAtLeast(1f),
+        bitmapH / glanceSize.height.value.coerceAtLeast(1f)
+    )
 
     val bitmap = when (kind) {
         CardKind.SPX -> data?.optJSONObject("SPX")?.let {
-            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025, bitmapW, bitmapH)
+            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025, bitmapW, bitmapH, canvasUnitsPerDp)
         }
         CardKind.QQQ -> data?.optJSONObject("QQQ")?.let {
-            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02, bitmapW, bitmapH)
+            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02, bitmapW, bitmapH, canvasUnitsPerDp)
         }
         CardKind.FGI -> data?.optJSONObject("FGI")?.let {
-            fgiCardBitmap(it, bitmapW, bitmapH)
+            fgiCardBitmap(it, bitmapW, bitmapH, canvasUnitsPerDp)
         }
     } ?: errorCardBitmap(bitmapW, bitmapH)
 
@@ -214,7 +218,8 @@ private fun marketCardBitmap(
     title: String,
     bandPct: Double,
     width: Int,
-    height: Int
+    height: Int,
+    canvasUnitsPerDp: Float
 ): Bitmap {
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
@@ -223,9 +228,15 @@ private fun marketCardBitmap(
     val mode = layoutMode(width, height)
     val short = min(width, height).toFloat()
     val pad = short * 0.055f
-    val titleSize = (short * 0.0615f).coerceIn(22f, 38f)
-    val versionSize = (short * 0.0365f).coerceIn(13f, 22f)
-    val timeSize = (short * 0.0405f).coerceIn(15f, 25f)
+    val titleSize = withIosWideFontFloor(
+        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, canvasUnitsPerDp
+    )
+    val versionSize = withIosWideFontFloor(
+        (short * 0.0365f).coerceIn(13f, 22f), 8f, mode, canvasUnitsPerDp
+    )
+    val timeSize = withIosWideFontFloor(
+        (short * 0.0405f).coerceIn(15f, 25f), 10f, mode, canvasUnitsPerDp
+    )
     val titleY = pad + titleSize
 
     drawText(canvas, title, pad, titleY, titleSize, COLOR_WHITE, true)
@@ -258,6 +269,7 @@ private fun marketCardBitmap(
                 maxWidth = signalWidth,
                 short = short,
                 densityFactor = 1f,
+                minimumRowSize = (if (bandPct <= 0.02) 15f else 14f) * canvasUnitsPerDp,
                 drawdownBold = bandPct <= 0.02
             )
         }
@@ -280,6 +292,7 @@ private fun marketCardBitmap(
                 maxWidth = width - pad * 2f,
                 short = short,
                 densityFactor = 0.82f,
+                minimumRowSize = 0f,
                 drawdownBold = bandPct <= 0.02
             )
         }
@@ -302,6 +315,7 @@ private fun marketCardBitmap(
                 maxWidth = width - pad * 2f,
                 short = short,
                 densityFactor = 0.75f,
+                minimumRowSize = 0f,
                 drawdownBold = bandPct <= 0.02
             )
         }
@@ -392,12 +406,16 @@ private fun drawSignalBlockResponsive(
     maxWidth: Float,
     short: Float,
     densityFactor: Float,
+    minimumRowSize: Float,
     drawdownBold: Boolean
 ) {
     if (sig == null) return
     val isAlert = sig.optBoolean("alert", false)
     val lines = sig.optJSONArray("lines")
-    val rowSize = (short * 0.067f * densityFactor).coerceIn(20f, 38f)
+    val rowSize = max(
+        (short * 0.067f * densityFactor).coerceIn(20f, 38f),
+        minimumRowSize
+    )
     val rowGap = rowSize * 1.62f
     var y = top + rowSize
 
@@ -506,7 +524,12 @@ private fun fitSignalRowSize(
 }
 
 /** FGI도 wide/stacked/tall 세 가지 배치로 재구성한다. */
-private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
+private fun fgiCardBitmap(
+    fgi: JSONObject,
+    width: Int,
+    height: Int,
+    canvasUnitsPerDp: Float
+): Bitmap {
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
@@ -519,7 +542,9 @@ private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
     val mode = layoutMode(width, height)
     val short = min(width, height).toFloat()
     val pad = short * 0.055f
-    val titleSize = (short * 0.0615f).coerceIn(22f, 38f)
+    val titleSize = withIosWideFontFloor(
+        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, canvasUnitsPerDp
+    )
     val titleY = pad + titleSize
     drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", pad, titleY, titleSize, COLOR_WHITE, true)
 
@@ -547,7 +572,9 @@ private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
             )
 
             val ratingY = contentTop + (bottom - contentTop) * 0.72f
-            val ratingSize = (short * 0.059f).coerceIn(22f, 35f)
+            val ratingSize = withIosWideFontFloor(
+                (short * 0.059f).coerceIn(22f, 35f), 15f, mode, canvasUnitsPerDp
+            )
             drawFittedCenteredText(
                 canvas,
                 rating,
@@ -565,7 +592,9 @@ private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
                 avg30,
                 rightCenter,
                 contentTop + (bottom - contentTop) * 0.90f,
-                (short * 0.050f).coerceIn(18f, 30f),
+                withIosWideFontFloor(
+                    (short * 0.050f).coerceIn(18f, 30f), 13f, mode, canvasUnitsPerDp
+                ),
                 rightRight - rightLeft
             )
         }
@@ -813,6 +842,21 @@ private fun errorCardBitmap(width: Int, height: Int): Bitmap {
     drawText(canvas, "AgiTQ", width / 2f, height / 2f - short * 0.03f, short * 0.085f, COLOR_WHITE, true, Paint.Align.CENTER)
     drawText(canvas, "데이터 로드 실패", width / 2f, height / 2f + short * 0.07f, short * 0.055f, COLOR_ALERT, true, Paint.Align.CENTER)
     return bitmap
+}
+
+/**
+ * Scriptable의 고정 pt 글자 크기를 가로형 위젯의 최소 크기로 보존한다.
+ * 큰 위젯에서는 기존 반응형 크기가 더 크므로 화면이 달라지지 않는다.
+ */
+private fun withIosWideFontFloor(
+    responsiveSize: Float,
+    iosPointSize: Float,
+    mode: LayoutMode,
+    canvasUnitsPerDp: Float
+): Float = if (mode == LayoutMode.WIDE) {
+    max(responsiveSize, iosPointSize * canvasUnitsPerDp)
+} else {
+    responsiveSize
 }
 
 private fun drawFittedText(
