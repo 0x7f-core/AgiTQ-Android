@@ -16,7 +16,6 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
-import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -37,7 +36,8 @@ private val cyan = ColorProvider(Color(0xFF80DFFF))
 
 class SpxWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent { SpxWidgetContent(loadData()) }
+        val data = loadData()
+        provideContent { SpxWidgetContent(data) }
     }
 }
 
@@ -47,7 +47,8 @@ class SpxWidgetReceiver : GlanceAppWidgetReceiver() {
 
 class QqqWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent { QqqWidgetContent(loadData()) }
+        val data = loadData()
+        provideContent { QqqWidgetContent(data) }
     }
 }
 
@@ -57,7 +58,8 @@ class QqqWidgetReceiver : GlanceAppWidgetReceiver() {
 
 class FgiWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent { FgiWidgetContent(loadData()) }
+        val data = loadData()
+        provideContent { FgiWidgetContent(data) }
     }
 }
 
@@ -93,10 +95,11 @@ private fun SpxWidgetContent(data: JSONObject?) {
                 Text("아기티큐 200슨피단", style = TextStyle(color = white, fontSize = 14.sp, fontWeight = FontWeight.Bold))
                 Spacer(GlanceModifier.height(4.dp))
                 Row(modifier = GlanceModifier.fillMaxWidth()) {
-                    Column(modifier = GlanceModifier.defaultWeight()) {
+                    Column {
                         Text("SPX", style = TextStyle(color = cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold))
                         Text(formatPrice(price), style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
                     }
+                    Spacer(GlanceModifier.height(1.dp))
                     Column(horizontalAlignment = Alignment.Horizontal.End) {
                         Text("200SMA", style = TextStyle(color = gray, fontSize = 9.sp))
                         Text(formatPrice(sma), style = TextStyle(color = gray, fontSize = 11.sp))
@@ -135,7 +138,7 @@ private fun QqqWidgetContent(data: JSONObject?) {
                 Text("아기티큐 200큐큐단", style = TextStyle(color = white, fontSize = 14.sp, fontWeight = FontWeight.Bold))
                 Spacer(GlanceModifier.height(4.dp))
                 Row(modifier = GlanceModifier.fillMaxWidth()) {
-                    Column(modifier = GlanceModifier.defaultWeight()) {
+                    Column {
                         Text("QQQ", style = TextStyle(color = cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold))
                         Text(formatPrice(price), style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
                     }
