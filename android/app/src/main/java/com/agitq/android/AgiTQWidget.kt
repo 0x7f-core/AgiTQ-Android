@@ -240,11 +240,12 @@ private fun marketCardBitmap(
 
     when (mode) {
         LayoutMode.WIDE -> {
-            val split = width * 0.565f
+            // Scriptable medium/large: chart 155~160pt, gap 8~10pt, info remainder.
+            val split = width * 0.535f
             val chartArea = RectF(pad * 0.78f, contentTop, split, bottom)
             drawMarketChartScriptable(canvas, asset, bandPct, chartArea)
 
-            val signalX = width * 0.575f
+            val signalX = width * 0.56f
             val signalTop = contentTop + (bottom - contentTop) * 0.06f
             val signalWidth = width - signalX - pad
             drawSignalBlockResponsive(
@@ -254,7 +255,8 @@ private fun marketCardBitmap(
                 top = signalTop,
                 maxWidth = signalWidth,
                 short = short,
-                densityFactor = 1f
+                densityFactor = 1f,
+                drawdownBold = bandPct <= 0.02
             )
         }
 
@@ -275,7 +277,8 @@ private fun marketCardBitmap(
                 top = chartBottom + pad * 0.30f,
                 maxWidth = width - pad * 2f,
                 short = short,
-                densityFactor = 0.82f
+                densityFactor = 0.82f,
+                drawdownBold = bandPct <= 0.02
             )
         }
 
@@ -296,7 +299,8 @@ private fun marketCardBitmap(
                 top = chartBottom + pad * 0.45f,
                 maxWidth = width - pad * 2f,
                 short = short,
-                densityFactor = 0.75f
+                densityFactor = 0.75f,
+                drawdownBold = bandPct <= 0.02
             )
         }
     }
@@ -344,7 +348,7 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
     fun x(i: Int): Float = plot.left + if (prices.size <= 1) 0f else i.toFloat() / (prices.size - 1) * plot.width()
     fun y(v: Double): Float = plot.bottom - ((v - minV) / (maxV - minV) * plot.height()).toFloat()
 
-    val lineScale = min(area.width() / 456f, area.height() / 284f).coerceIn(0.55f, 1.65f)
+    val lineScale = min(area.width() / 500f, area.height() / 300f).coerceIn(0.55f, 1.65f)
 
     fun series(data: List<Double?>, color: Int, widthPx: Float) {
         val path = Path()
@@ -372,9 +376,10 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
         })
     }
 
-    series(upper, COLOR_UPPER, 3.8f)
-    series(lower, COLOR_LOWER, 3.8f)
-    series(prices.map { it }, COLOR_CP, 6.0f)
+    // Scriptable drawBandChart: upper/lower 3px, current price 5px.
+    series(upper, COLOR_UPPER, 3f)
+    series(lower, COLOR_LOWER, 3f)
+    series(prices.map { it }, COLOR_CP, 5f)
 }
 
 private fun drawSignalBlockResponsive(
@@ -384,7 +389,8 @@ private fun drawSignalBlockResponsive(
     top: Float,
     maxWidth: Float,
     short: Float,
-    densityFactor: Float
+    densityFactor: Float,
+    drawdownBold: Boolean
 ) {
     if (sig == null) return
     val isAlert = sig.optBoolean("alert", false)
@@ -416,23 +422,35 @@ private fun drawSignalBlockResponsive(
         sig.optString("name", "-"),
         x,
         y,
-        rowSize * 0.66f,
+        rowSize * 0.72f,
         if (isAlert) COLOR_ALERT else COLOR_P2,
         false,
         maxWidth
     )
 
     y += rowSize * 1.48f
-    drawFittedText(
-        canvas,
-        drawdownText(sig),
-        x,
-        y,
-        rowSize * 0.78f,
-        COLOR_WHITE,
-        true,
-        maxWidth
-    )
+    if (drawdownBold) {
+        drawFittedText(
+            canvas,
+            drawdownText(sig),
+            x,
+            y,
+            rowSize * 0.76f,
+            COLOR_WHITE,
+            true,
+            maxWidth
+        )
+    } else {
+        drawFittedMediumText(
+            canvas,
+            drawdownText(sig),
+            x,
+            y,
+            rowSize * 0.78f,
+            COLOR_WHITE,
+            maxWidth
+        )
+    }
 }
 
 private fun drawSignalRow(
@@ -465,7 +483,8 @@ private fun drawSignalRow(
         }
     }
 
-    x += boldPaint.measureText(" ") * 1.4f
+    // Scriptable addToken appends exactly one space after the ETF token.
+    x += boldPaint.measureText(" ")
     drawText(canvas, action, x, baseline, size, COLOR_WHITE, true)
 }
 
@@ -507,16 +526,17 @@ private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
 
     when (mode) {
         LayoutMode.WIDE -> {
-            val historyRight = width * 0.535f
+            // Scriptable large FGI: history 148pt, gap 8pt, gauge 155pt.
+            val historyRight = width * 0.505f
             drawFgiHistoryScriptable(
                 canvas,
                 fgi,
                 RectF(pad, contentTop + pad * 0.25f, historyRight, bottom)
             )
 
-            val rightCenter = width * 0.775f
-            val rightLeft = width * 0.575f
+            val rightLeft = width * 0.535f
             val rightRight = width - pad
+            val rightCenter = (rightLeft + rightRight) / 2f
             val gaugeBottom = contentTop + (bottom - contentTop) * 0.56f
             drawFgiGaugeScriptable(
                 canvas,
@@ -656,7 +676,7 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     val scale = min(area.width() / 480f, area.height() / 300f).coerceIn(0.55f, 1.8f)
     val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.argb(51, 170, 170, 170)
-        strokeWidth = 1.5f * scale
+        strokeWidth = 1f * scale
     }
     listOf(25.0, 50.0, 75.0).forEach { level ->
         val y = toY(level)
@@ -672,7 +692,7 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.argb(102, 255, 255, 255)
         style = Paint.Style.STROKE
-        strokeWidth = 2.8f * scale
+        strokeWidth = 2f * scale
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     })
@@ -681,7 +701,7 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
         canvas.drawCircle(
             toX(i),
             toY(v),
-            4.6f * scale,
+            4f * scale,
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(v) }
         )
     }
@@ -736,10 +756,10 @@ private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
     val ly = cy + sin(needleAngle).toFloat() * labelDist
     drawText(
         canvas,
-        clamped.toInt().toString(),
+        clamped.roundToInt().toString(),
         sx(lx),
         sy(ly) + 8f * scale,
-        23f * scale,
+        22f * scale,
         COLOR_WHITE,
         true,
         Paint.Align.CENTER
@@ -755,24 +775,24 @@ private fun drawFgiStats(
     requestedSize: Float,
     maxWidth: Float
 ) {
-    val now = "현재 ${value.toInt()}"
+    val now = "현재 ${value.roundToInt()}"
     val slash = " / "
-    val avg = if (avg30.isFinite()) "30일 평균 ${avg30.toInt()}" else "30일 평균 -"
+    val avg = if (avg30.isFinite()) "30일 평균 ${avg30.roundToInt()}" else "30일 평균 -"
 
     var size = requestedSize
     fun totalWidth(s: Float): Float =
-        textPaint(s, fgiAndroidColor(value), true).measureText(now) +
+        mediumTextPaint(s, fgiAndroidColor(value)).measureText(now) +
             textPaint(s + 2f, COLOR_WHITE, true).measureText(slash) +
-            textPaint(s, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2, true).measureText(avg)
+            mediumTextPaint(s, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2).measureText(avg)
 
     val initialWidth = totalWidth(size)
     if (initialWidth > maxWidth && initialWidth > 0f) {
         size = (size * maxWidth / initialWidth).coerceAtLeast(size * 0.65f)
     }
 
-    val nowPaint = textPaint(size, fgiAndroidColor(value), true)
+    val nowPaint = mediumTextPaint(size, fgiAndroidColor(value))
     val slashPaint = textPaint(size + 2f, COLOR_WHITE, true)
-    val avgPaint = textPaint(size, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2, true)
+    val avgPaint = mediumTextPaint(size, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2)
     val total = nowPaint.measureText(now) + slashPaint.measureText(slash) + avgPaint.measureText(avg)
     var x = centerX - total / 2f
 
@@ -809,6 +829,23 @@ private fun drawFittedText(
         size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
     }
     drawText(canvas, text, x, y, size, color, bold)
+}
+
+private fun drawFittedMediumText(
+    canvas: Canvas,
+    text: String,
+    x: Float,
+    y: Float,
+    requestedSize: Float,
+    color: Int,
+    maxWidth: Float
+) {
+    var size = requestedSize
+    val measured = mediumTextPaint(size, color).measureText(text)
+    if (measured > maxWidth && measured > 0f) {
+        size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
+    }
+    canvas.drawText(text, x, y, mediumTextPaint(size, color))
 }
 
 private fun drawFittedCenteredText(
@@ -852,6 +889,17 @@ private fun textPaint(
     textSize = size
     textAlign = align
     typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
+}
+
+private fun mediumTextPaint(
+    size: Float,
+    color: Int,
+    align: Paint.Align = Paint.Align.LEFT
+): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    this.color = color
+    textSize = size
+    textAlign = align
+    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 }
 
 private fun drawdownText(sig: JSONObject?): String {

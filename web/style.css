@@ -5,7 +5,7 @@
   --border:#1c1c1e;
   --p1:#ffffff;
   --p2:#aaaaaa;
-  --status:#9a9aa0;
+  --status:#aaaaaa;
   --dot:#666666;
   --divider:#333333;
   --tqqq:#e8714f;
@@ -98,7 +98,7 @@ canvas{display:block;max-width:100%}
 }
 
 .chart-box{
-  flex:1.12;
+  flex:1.04;
   min-width:0;
   display:flex;
   align-items:center;
@@ -127,7 +127,7 @@ canvas{display:block;max-width:100%}
 .token-spym{color:var(--spym)}
 .token-sgov{color:var(--sgov)}
 .token-dot{color:var(--dot)}
-.token-action{color:var(--p1);margin-left:.45em}
+.token-action{color:var(--p1);margin-left:.30em}
 .token-alert{color:var(--alert)}
 
 .status-text{
@@ -152,7 +152,7 @@ canvas{display:block;max-width:100%}
 
 .fgi-card{padding-top:20px}
 .fgi-row{padding-top:8px}
-.fgi-chart-box{flex:1.12}
+.fgi-chart-box{flex:.94}
 .fgi-chart-box canvas{aspect-ratio:480/300}
 .fgi-info-box{
   flex:.98;
