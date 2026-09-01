@@ -11,19 +11,28 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -55,6 +64,7 @@ private val COLOR_ALERT = AndroidColor.rgb(255, 77, 77)
 
 private enum class CardKind { SPX, QQQ, FGI }
 private enum class LayoutMode { WIDE, STACKED, TALL }
+private val RefreshKindKey = ActionParameters.Key<String>("refresh_kind")
 
 class SpxWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -105,6 +115,21 @@ private suspend fun loadData(): JSONObject? = withContext(Dispatchers.IO) {
     runCatching { AgiTQApi.load() }.getOrNull()
 }
 
+/** 우측 하단 수동 새로고침 버튼: 현재 누른 위젯만 즉시 다시 로드한다. */
+class RefreshWidgetAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        when (parameters[RefreshKindKey]) {
+            CardKind.SPX.name -> SpxWidget().update(context, glanceId)
+            CardKind.QQQ.name -> QqqWidget().update(context, glanceId)
+            CardKind.FGI.name -> FgiWidget().update(context, glanceId)
+        }
+    }
+}
+
 @Composable
 private fun ResponsiveFullCard(
     context: Context,
@@ -129,14 +154,32 @@ private fun ResponsiveFullCard(
         }
     } ?: errorCardBitmap(bitmapW, bitmapH)
 
-    Image(
-        provider = ImageProvider(bitmap),
-        contentDescription = description,
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .clickable(actionStartActivity(dashboardIntent(context))),
-        contentScale = ContentScale.FillBounds
-    )
+    Box(
+        modifier = GlanceModifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        Image(
+            provider = ImageProvider(bitmap),
+            contentDescription = description,
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .clickable(actionStartActivity(dashboardIntent(context))),
+            contentScale = ContentScale.FillBounds
+        )
+
+        Image(
+            provider = ImageProvider(R.drawable.ic_widget_refresh),
+            contentDescription = "새로고침",
+            modifier = GlanceModifier
+                .size(42.dp)
+                .padding(8.dp)
+                .clickable(
+                    actionRunCallback<RefreshWidgetAction>(
+                        actionParametersOf(RefreshKindKey to kind.name)
+                    )
+                )
+        )
+    }
 }
 
 private fun bitmapDimensions(aspect: Float): Pair<Int, Int> {
@@ -820,12 +863,12 @@ private fun drawdownText(sig: JSONObject?): String {
     }
 }
 
-/** 모든 Android 위젯의 기준시각은 한국 표준시(KST)로 표시. */
+/** 기준시각은 한국 표준시(KST)로 계산하고 화면에는 원본처럼 `기준`만 표시. */
 private fun formatMarketTime(epochSeconds: Long): String {
     if (epochSeconds <= 0L) return "-"
     return runCatching {
         DateTimeFormatter
-            .ofPattern("yy.MM.dd. HH:mm '한국시간'", Locale.KOREA)
+            .ofPattern("yy.MM.dd. HH:mm '기준'", Locale.KOREA)
             .withZone(ZoneId.of("Asia/Seoul"))
             .format(Instant.ofEpochSecond(epochSeconds))
     }.getOrDefault("-")

@@ -75,7 +75,7 @@ function formatMarketTime(epochSeconds) {
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   }).formatToParts(new Date(Number(epochSeconds) * 1000));
   const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 한국시간`;
+  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 기준`;
 }
 
 // Original Scriptable drawBandChart: 90 points, upper/lower band and current price only.
@@ -292,3 +292,21 @@ async function renderDashboard() {
 
 renderDashboard();
 setInterval(renderDashboard, 300000);
+
+
+const manualRefreshButton = document.getElementById('manual-refresh');
+if (manualRefreshButton) {
+  manualRefreshButton.addEventListener('click', async () => {
+    if (manualRefreshButton.disabled) return;
+    manualRefreshButton.disabled = true;
+    manualRefreshButton.classList.add('refreshing');
+    manualRefreshButton.textContent = '↻ 새로고침 중...';
+    try {
+      await renderDashboard();
+    } finally {
+      manualRefreshButton.disabled = false;
+      manualRefreshButton.classList.remove('refreshing');
+      manualRefreshButton.textContent = '↻ 새로고침';
+    }
+  });
+}
