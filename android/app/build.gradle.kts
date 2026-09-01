@@ -12,16 +12,26 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "4.3"
+        versionCode = 5
+        versionName = "4.4"
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("AGITQ_KEYSTORE_PATH") ?: "agitq-release.p12"
+            storeFile = file(keystorePath)
+            storePassword = System.getenv("AGITQ_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("AGITQ_KEY_ALIAS")
+            keyPassword = System.getenv("AGITQ_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         getByName("release") {
-            // Sign the release APK with Android's standard debug key so the
-            // GitHub Actions artifact can be installed directly on a device.
-            // This is suitable for personal/testing distribution, not Play Store publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use a repository-specific, persistent signing key supplied by
+            // GitHub Actions secrets. Keeping the same key allows future APKs
+            // to update the installed app without uninstalling it first.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
