@@ -2,23 +2,38 @@ package com.agitq.android
 
 import android.content.Context
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.glance.*
+import androidx.glance.Alignment
+import androidx.glance.Composable
+import androidx.glance.GlanceId
+import androidx.glance.LocalSize
+import androidx.glance.Modifier
+import androidx.glance.background
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
-import androidx.glance.layout.*
+import androidx.glance.layout.Arrangement
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import androidx.glance.unit.dp
+import androidx.glance.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class AgiTQWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = withContext(Dispatchers.IO) { runCatching { AgiTQApi.load() }.getOrNull() }
+        val data = withContext(Dispatchers.IO) {
+            runCatching { AgiTQApi.load() }.getOrNull()
+        }
         provideContent { WidgetContent(data) }
     }
 }
@@ -37,44 +52,118 @@ private fun WidgetContent(data: JSONObject?) {
     val wide = size.width >= 250.dp
     val large = size.height >= 180.dp
 
-    Column(Modifier.fillMaxSize().background(black).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(black)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         if (data == null) {
-            Text("AgiTQ\n데이터 로드 실패", style = TextStyle(color = red, fontWeight = FontWeight.Bold))
+            Text(
+                text = "AgiTQ\n데이터 로드 실패",
+                style = TextStyle(color = red, fontWeight = FontWeight.Bold)
+            )
         } else {
             val spx = data.optJSONObject("SPX") ?: JSONObject()
             val qqq = data.optJSONObject("QQQ") ?: JSONObject()
             val fgi = data.optJSONObject("FGI") ?: JSONObject()
             val spxSig = spx.optJSONObject("signal") ?: JSONObject()
             val qqqSig = qqq.optJSONObject("signal") ?: JSONObject()
+
             if (!wide) {
-                Text("공포·탐욕 지수", style=TextStyle(color=white,fontWeight=FontWeight.Bold))
+                Text(
+                    text = "공포·탐욕 지수",
+                    style = TextStyle(color = white, fontWeight = FontWeight.Bold)
+                )
                 Spacer(Modifier.height(6.dp))
-                Text(fgi.optInt("value",0).toString(), style=TextStyle(color=white,fontSize=28.sp,fontWeight=FontWeight.Bold))
-                Text(fgi.optString("rating","-"), style=TextStyle(color=gray))
+                Text(
+                    text = fgi.optInt("value", 0).toString(),
+                    style = TextStyle(
+                        color = white,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Text(
+                    text = fgi.optString("rating", "-"),
+                    style = TextStyle(color = gray)
+                )
             } else if (!large) {
-                Text("아기티큐 200큐큐단 (QQQ)", style=TextStyle(color=white,fontWeight=FontWeight.Bold))
+                Text(
+                    text = "아기티큐 200큐큐단 (QQQ)",
+                    style = TextStyle(color = white, fontWeight = FontWeight.Bold)
+                )
                 Spacer(Modifier.height(5.dp))
-                Text("QQQ ${"%.2f".format(qqq.optDouble("price",0.0))}", style=TextStyle(color=white,fontWeight=FontWeight.Bold))
+                Text(
+                    text = "QQQ ${"%.2f".format(qqq.optDouble("price", 0.0))}",
+                    style = TextStyle(color = white, fontWeight = FontWeight.Bold)
+                )
                 SignalLines(qqqSig, gray, red)
             } else {
-                Text("아기티큐 200슨피단 (SPX)", style=TextStyle(color=white,fontWeight=FontWeight.Bold))
-                Text("SPX ${"%.2f".format(spx.optDouble("price",0.0))}", style=TextStyle(color=white))
+                Text(
+                    text = "아기티큐 200슨피단 (SPX)",
+                    style = TextStyle(color = white, fontWeight = FontWeight.Bold)
+                )
+                Text(
+                    text = "SPX ${"%.2f".format(spx.optDouble("price", 0.0))}",
+                    style = TextStyle(color = white)
+                )
                 SignalLines(spxSig, gray, red)
                 Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
-                    Column { Text("CNN FGI",style=TextStyle(color=gray)); Text(fgi.optInt("value",0).toString(),style=TextStyle(color=white,fontWeight=FontWeight.Bold)) }
-                    Column { Text(fgi.optString("rating","-"),style=TextStyle(color=gray)); Text("30일 ${"%.0f".format(fgi.optDouble("avg30",0.0))}",style=TextStyle(color=white)) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("CNN FGI", style = TextStyle(color = gray))
+                        Text(
+                            fgi.optInt("value", 0).toString(),
+                            style = TextStyle(color = white, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Column {
+                        Text(fgi.optString("rating", "-"), style = TextStyle(color = gray))
+                        Text(
+                            "30일 ${"%.0f".format(fgi.optDouble("avg30", 0.0))}",
+                            style = TextStyle(color = white)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Composable private fun SignalLines(sig: JSONObject, gray: ColorProvider, red: ColorProvider) {
+@Composable
+private fun SignalLines(sig: JSONObject, gray: ColorProvider, red: ColorProvider) {
     Spacer(Modifier.height(5.dp))
-    val alert=sig.optBoolean("alert",false)
-    Text(sig.optString("name","-"),style=TextStyle(color=if(alert) red else gray,fontWeight=if(alert) FontWeight.Bold else FontWeight.Normal))
-    val lines=sig.optJSONArray("lines")
-    if(lines!=null) for(i in 0 until lines.length()) { val x=lines.optJSONArray(i); if(x!=null) Text("${x.optString(0)}  ${x.optString(1)}",style=TextStyle(color=gray)) }
-    if(sig.has("drawdown")&&!sig.isNull("drawdown")) Text("TQQQ 최고점 대비 ${"%.1f".format(sig.optDouble("drawdown"))}%",style=TextStyle(color=gray))
+    val alert = sig.optBoolean("alert", false)
+    Text(
+        text = sig.optString("name", "-"),
+        style = TextStyle(
+            color = if (alert) red else gray,
+            fontWeight = if (alert) FontWeight.Bold else FontWeight.Normal
+        )
+    )
+
+    val lines = sig.optJSONArray("lines")
+    if (lines != null) {
+        for (i in 0 until lines.length()) {
+            val x = lines.optJSONArray(i)
+            if (x != null) {
+                Text(
+                    text = "${x.optString(0)}  ${x.optString(1)}",
+                    style = TextStyle(color = gray)
+                )
+            }
+        }
+    }
+
+    if (sig.has("drawdown") && !sig.isNull("drawdown")) {
+        Text(
+            text = "TQQQ 최고점 대비 ${"%.1f".format(sig.optDouble("drawdown"))}%",
+            style = TextStyle(color = gray)
+        )
+    }
 }
