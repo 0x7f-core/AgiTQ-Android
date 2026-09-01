@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Keep the existing 28dp outer circle unchanged. -->
+    <item android:drawable="@drawable/bg_refresh_circle" />
+
+    <!-- New resource ID plus vector-level scaling forces One UI to render the compact arrow. -->
+    <item android:drawable="@drawable/ic_refresh_compact" />
+</layer-list>

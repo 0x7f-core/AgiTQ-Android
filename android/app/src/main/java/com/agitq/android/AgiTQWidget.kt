@@ -175,7 +175,7 @@ private fun ResponsiveFullCard(
             contentAlignment = Alignment.BottomEnd
         ) {
             Image(
-                provider = ImageProvider(R.drawable.ic_widget_refresh),
+                provider = ImageProvider(R.drawable.ic_widget_refresh_compact),
                 contentDescription = "새로고침",
                 modifier = GlanceModifier
                     .size(28.dp)
