@@ -1,6 +1,8 @@
 package com.agitq.android
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -8,10 +10,10 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -39,7 +41,7 @@ private val cyan = ColorProvider(Color(0xFF80DFFF))
 class SpxWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        provideContent { SpxWidgetContent(data) }
+        provideContent { SpxWidgetContent(context, data) }
     }
 }
 
@@ -50,7 +52,7 @@ class SpxWidgetReceiver : GlanceAppWidgetReceiver() {
 class QqqWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        provideContent { QqqWidgetContent(data) }
+        provideContent { QqqWidgetContent(context, data) }
     }
 }
 
@@ -61,7 +63,7 @@ class QqqWidgetReceiver : GlanceAppWidgetReceiver() {
 class FgiWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        provideContent { FgiWidgetContent(data) }
+        provideContent { FgiWidgetContent(context, data) }
     }
 }
 
@@ -74,7 +76,7 @@ private suspend fun loadData(): JSONObject? = withContext(Dispatchers.IO) {
 }
 
 @Composable
-private fun SpxWidgetContent(data: JSONObject?) {
+private fun SpxWidgetContent(context: Context, data: JSONObject?) {
     val size = LocalSize.current
     val spx = data?.optJSONObject("SPX")
     val sig = spx?.optJSONObject("signal")
@@ -83,7 +85,7 @@ private fun SpxWidgetContent(data: JSONObject?) {
     val dd = sig?.optDouble("drawdown", 0.0) ?: 0.0
     val compact = size.width < 220.dp
 
-    WidgetShell {
+    WidgetShell(context) {
         if (data == null || spx == null) ErrorView()
         else if (compact) {
             Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
@@ -115,7 +117,7 @@ private fun SpxWidgetContent(data: JSONObject?) {
 }
 
 @Composable
-private fun QqqWidgetContent(data: JSONObject?) {
+private fun QqqWidgetContent(context: Context, data: JSONObject?) {
     val size = LocalSize.current
     val qqq = data?.optJSONObject("QQQ")
     val sig = qqq?.optJSONObject("signal")
@@ -124,7 +126,7 @@ private fun QqqWidgetContent(data: JSONObject?) {
     val dd = sig?.optDouble("drawdown", 0.0) ?: 0.0
     val compact = size.width < 220.dp
 
-    WidgetShell {
+    WidgetShell(context) {
         if (data == null || qqq == null) ErrorView()
         else if (compact) {
             Column(horizontalAlignment = Alignment.Horizontal.CenterHorizontally) {
@@ -156,14 +158,14 @@ private fun QqqWidgetContent(data: JSONObject?) {
 }
 
 @Composable
-private fun FgiWidgetContent(data: JSONObject?) {
+private fun FgiWidgetContent(context: Context, data: JSONObject?) {
     val size = LocalSize.current
     val fgi = data?.optJSONObject("FGI")
     val value = fgi?.optDouble("value", 0.0) ?: 0.0
     val avg30 = fgi?.optDouble("avg30", 0.0) ?: 0.0
     val compact = size.width < 220.dp
 
-    WidgetShell {
+    WidgetShell(context) {
         if (data == null || fgi == null) ErrorView()
         else Column(
             modifier = GlanceModifier.fillMaxWidth(),
@@ -182,14 +184,20 @@ private fun FgiWidgetContent(data: JSONObject?) {
     }
 }
 
+private fun dashboardIntent(context: Context): Intent = Intent(context, MainActivity::class.java).apply {
+    action = "com.agitq.android.action.OPEN_DASHBOARD"
+    data = Uri.parse("agitq://dashboard")
+    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+}
+
 @Composable
-private fun WidgetShell(content: @Composable () -> Unit) {
+private fun WidgetShell(context: Context, content: @Composable () -> Unit) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(black)
-            .padding(10.dp)
-            .clickable(actionStartActivity<MainActivity>()),
+            .clickable(actionStartActivity(dashboardIntent(context)))
+            .padding(10.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally
     ) { content() }
