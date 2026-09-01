@@ -1,27 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        Rebuilt from the exact 200SPX widget button specification:
+        28dp circular button, 6dp effective edge margin, 5dp internal icon padding.
+        AgiTQ's Glance Image already supplies 2dp outer padding, so the drawable
+        uses 4dp edge inset here to reproduce the same 6dp visual margin.
+    -->
+    <item
+        android:width="28dp"
+        android:height="28dp"
+        android:gravity="end|bottom"
+        android:right="4dp"
+        android:bottom="4dp"
+        android:drawable="@drawable/bg_refresh_circle" />
 
-    <!-- Reference-style circular button, shifted toward the true bottom-right corner. -->
-    <path
-        android:fillColor="#66111111"
-        android:strokeColor="#5CFFFFFF"
-        android:strokeWidth="0.7"
-        android:pathData="M15.5,8.75a6.75,6.75 0,1 0,0 13.5a6.75,6.75 0,1 0,0 -13.5" />
-
-    <!-- One continuous circular refresh arrow, matching the reference icon. -->
-    <group
-        android:pivotX="12"
-        android:pivotY="12"
-        android:scaleX="0.75"
-        android:scaleY="0.75"
-        android:translateX="3.5"
-        android:translateY="3.5">
-        <path
-            android:fillColor="#E8FFFFFF"
-            android:pathData="M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.09,0 -7.19,3.72 -6.39,7.69L3,9.08V16h6.92l-2.67,-2.67C6.54,10.84 8.44,8 12,8c2.21,0 4,1.79 4,4s-1.79,4 -4,4c-1.83,0 -3.37,-1.23 -3.84,-2.91H4.02C4.52,17.03 7.89,20 12,20c4.42,0 8,-3.58 8,-8c0,-2.21 -0.9,-4.21 -2.35,-5.65z" />
-    </group>
-</vector>
+    <!-- 28dp button - 5dp padding on both sides = 18dp visible refresh glyph. -->
+    <item
+        android:width="18dp"
+        android:height="18dp"
+        android:gravity="end|bottom"
+        android:right="9dp"
+        android:bottom="9dp"
+        android:drawable="@drawable/ic_refresh" />
+</layer-list>
