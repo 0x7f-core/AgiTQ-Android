@@ -110,52 +110,60 @@ private fun MarketWidgetContent(
     val sig = asset?.optJSONObject("signal")
     val price = asset?.optDouble("price", 0.0) ?: 0.0
     val sma = sig?.optDouble("sma", 0.0) ?: 0.0
-    val compact = size.width < 220.dp
-    val shortHeight = size.height < 135.dp
+
+    // Samsung One UI reports widget size in dp after density/grid conversion.
+    // The user's visually wide 4-cell widget is around ~200dp wide / ~130dp high,
+    // so the previous 220dp/135dp cutoffs incorrectly selected the tiny layout.
+    val compact = size.width < 170.dp
+    val shortHeight = size.height < 100.dp
+    val showTitle = size.height >= 110.dp
 
     WidgetShell(context) {
         if (data == null || asset == null) {
             ErrorView()
         } else {
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                if (!compact) {
-                    Text(title, style = TextStyle(color = white, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-                    Spacer(GlanceModifier.height(2.dp))
+            Column(
+                modifier = GlanceModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.Horizontal.CenterHorizontally
+            ) {
+                if (showTitle) {
+                    Text(title, style = TextStyle(color = white, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                    Spacer(GlanceModifier.height(1.dp))
                 }
 
                 Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
-                    Text(symbol, style = TextStyle(color = cyan, fontSize = if (compact) 10.sp else 11.sp, fontWeight = FontWeight.Bold))
-                    Spacer(GlanceModifier.width(7.dp))
-                    Text(formatPrice(price), style = TextStyle(color = white, fontSize = if (compact) 20.sp else 23.sp, fontWeight = FontWeight.Bold))
+                    Text(symbol, style = TextStyle(color = cyan, fontSize = if (compact) 9.sp else 10.sp, fontWeight = FontWeight.Bold))
+                    Spacer(GlanceModifier.width(6.dp))
+                    Text(formatPrice(price), style = TextStyle(color = white, fontSize = if (compact) 19.sp else 21.sp, fontWeight = FontWeight.Bold))
                 }
                 Text(
                     "200SMA ${formatPrice(sma)}  ·  ${formatDistance(price, sma)}",
-                    style = TextStyle(color = gray, fontSize = 8.sp)
+                    style = TextStyle(color = gray, fontSize = 7.sp)
                 )
 
                 if (chart != null && !shortHeight) {
-                    Spacer(GlanceModifier.height(3.dp))
+                    Spacer(GlanceModifier.height(2.dp))
                     Image(
                         provider = ImageProvider(chart),
                         contentDescription = "$symbol 90일 가격 및 200일 밴드 차트",
-                        modifier = GlanceModifier.fillMaxWidth().height(if (compact) 34.dp else 55.dp),
+                        modifier = GlanceModifier.fillMaxWidth().height(if (compact) 30.dp else 38.dp),
                         contentScale = ContentScale.FillBounds
                     )
                 }
 
-                Spacer(GlanceModifier.height(3.dp))
+                Spacer(GlanceModifier.height(2.dp))
                 Text(
                     sig?.optString("name", "-") ?: "-",
-                    style = TextStyle(color = signalColor(sig), fontSize = if (compact) 8.sp else 9.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(color = signalColor(sig), fontSize = if (compact) 7.sp else 8.sp, fontWeight = FontWeight.Bold)
                 )
                 Text(
                     signalSummary(sig),
-                    style = TextStyle(color = white, fontSize = if (compact) 8.sp else 9.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(color = white, fontSize = if (compact) 7.sp else 8.sp, fontWeight = FontWeight.Bold)
                 )
                 if (!shortHeight) {
                     Text(
                         drawdownText(sig),
-                        style = TextStyle(color = gray, fontSize = 8.sp)
+                        style = TextStyle(color = gray, fontSize = 7.sp)
                     )
                 }
             }
@@ -169,8 +177,8 @@ private fun FgiWidgetContent(context: Context, data: JSONObject?, gauge: Bitmap?
     val fgi = data?.optJSONObject("FGI")
     val value = fgi?.optDouble("value", Double.NaN) ?: Double.NaN
     val avg30 = fgi?.optDouble("avg30", Double.NaN) ?: Double.NaN
-    val compact = size.width < 220.dp
-    val roomy = size.height >= 165.dp
+    val compact = size.width < 170.dp
+    val roomy = size.height >= 125.dp
 
     WidgetShell(context) {
         if (data == null || fgi == null || !value.isFinite()) {
@@ -182,17 +190,17 @@ private fun FgiWidgetContent(context: Context, data: JSONObject?, gauge: Bitmap?
             ) {
                 Text(
                     "공포·탐욕 지수",
-                    style = TextStyle(color = white, fontSize = if (compact) 11.sp else 13.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(color = white, fontSize = if (compact) 10.sp else 12.sp, fontWeight = FontWeight.Bold)
                 )
                 Row(verticalAlignment = Alignment.Vertical.CenterVertically) {
                     Text(
                         value.toInt().toString(),
-                        style = TextStyle(color = fgiColor(value), fontSize = if (compact) 27.sp else 32.sp, fontWeight = FontWeight.Bold)
+                        style = TextStyle(color = fgiColor(value), fontSize = if (compact) 25.sp else 29.sp, fontWeight = FontWeight.Bold)
                     )
-                    Spacer(GlanceModifier.width(8.dp))
+                    Spacer(GlanceModifier.width(7.dp))
                     Text(
                         fgiRatingKo(fgi.optString("rating")),
-                        style = TextStyle(color = fgiColor(value), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        style = TextStyle(color = fgiColor(value), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     )
                 }
 
@@ -200,22 +208,22 @@ private fun FgiWidgetContent(context: Context, data: JSONObject?, gauge: Bitmap?
                     Image(
                         provider = ImageProvider(gauge),
                         contentDescription = "공포 탐욕 지수 게이지 ${value.toInt()}",
-                        modifier = GlanceModifier.fillMaxWidth().height(if (compact) 42.dp else 52.dp),
+                        modifier = GlanceModifier.fillMaxWidth().height(if (compact) 38.dp else 44.dp),
                         contentScale = ContentScale.FillBounds
                     )
                 }
 
                 Text(
                     if (avg30.isFinite()) "30일 평균 ${avg30.toInt()}  ·  ${formatFgiDelta(value, avg30)}" else "30일 평균 -",
-                    style = TextStyle(color = gray, fontSize = 8.sp)
+                    style = TextStyle(color = gray, fontSize = 7.sp)
                 )
 
                 if (roomy && history != null) {
-                    Spacer(GlanceModifier.height(2.dp))
+                    Spacer(GlanceModifier.height(1.dp))
                     Image(
                         provider = ImageProvider(history),
                         contentDescription = "공포 탐욕 지수 최근 추이",
-                        modifier = GlanceModifier.fillMaxWidth().height(28.dp),
+                        modifier = GlanceModifier.fillMaxWidth().height(20.dp),
                         contentScale = ContentScale.FillBounds
                     )
                 }
@@ -237,7 +245,7 @@ private fun WidgetShell(context: Context, content: @Composable () -> Unit) {
             .fillMaxSize()
             .background(black)
             .clickable(actionStartActivity(dashboardIntent(context)))
-            .padding(8.dp),
+            .padding(6.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally
     ) { content() }
