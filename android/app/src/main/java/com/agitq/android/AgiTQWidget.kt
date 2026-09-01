@@ -126,11 +126,14 @@ private fun marketCardBitmap(asset: JSONObject, title: String, bandPct: Double):
     val sig = asset.optJSONObject("signal")
 
     drawText(canvas, title, 30f, 48f, 32f, COLOR_WHITE, true)
-    drawText(canvas, SCRIPTABLE_VERSION, CARD_W - 30f, 46f, 17f, COLOR_P2, false, Paint.Align.RIGHT)
+    drawText(canvas, SCRIPTABLE_VERSION, CARD_W - 30f, 46f, 19f, COLOR_P2, false, Paint.Align.RIGHT)
     drawText(canvas, formatMarketTime(asset.optLong("mTime", 0L)), 30f, 86f, 21f, COLOR_WHITE)
 
-    drawMarketChartScriptable(canvas, asset, bandPct, RectF(30f, 124f, 462f, 388f))
-    drawSignalBlock(canvas, sig, 500f, 150f)
+    // One UI cards have a little more horizontal breathing room than iOS.
+    // Enlarge the chart and pull the strategy block slightly left so the visual weight
+    // remains close to the original Scriptable medium/large layout.
+    drawMarketChartScriptable(canvas, asset, bandPct, RectF(24f, 118f, 480f, 402f))
+    drawSignalBlock(canvas, sig, 478f, 148f)
 
     return bitmap
 }
@@ -285,20 +288,20 @@ private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
     drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", 30f, 50f, 32f, COLOR_WHITE, true)
 
     drawFgiHistoryScriptable(canvas, fgi, RectF(30f, 118f, 468f, 440f))
-    drawFgiGaugeScriptable(canvas, value, RectF(520f, 105f, 870f, 302f))
+    drawFgiGaugeScriptable(canvas, value, RectF(520f, 115f, 870f, 312f))
 
     drawText(
         canvas,
         rating,
         695f,
-        356f,
+        366f,
         31f,
         fgiAndroidColor(value),
         true,
         Paint.Align.CENTER
     )
 
-    drawFgiStats(canvas, value, avg30, 695f, 414f, 26f)
+    drawFgiStats(canvas, value, avg30, 695f, 424f, 26f)
     return bitmap
 }
 
