@@ -70,12 +70,12 @@ function translateRating(rating) {
 function formatMarketTime(epochSeconds) {
   if (!epochSeconds) return '-';
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: 'Asia/Seoul',
     year: '2-digit', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   }).formatToParts(new Date(Number(epochSeconds) * 1000));
   const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 기준`;
+  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 한국시간`;
 }
 
 // Original Scriptable drawBandChart: 90 points, upper/lower band and current price only.
