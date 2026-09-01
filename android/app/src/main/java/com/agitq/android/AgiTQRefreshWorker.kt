@@ -1,7 +1,6 @@
 package com.agitq.android
 
 import android.content.Context
-import androidx.glance.appwidget.updateAll
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 
@@ -14,9 +13,10 @@ class AgiTQRefreshWorker(appContext: Context, params: WorkerParameters) : Corout
         }
 
         return runCatching {
-            SpxWidget().updateAll(applicationContext)
-            QqqWidget().updateAll(applicationContext)
-            FgiWidget().updateAll(applicationContext)
-        }.fold({ Result.success() }, { Result.retry() })
+            WidgetRefreshCoordinator.refreshAll(applicationContext)
+        }.fold(
+            onSuccess = { refresh -> if (refresh.isFresh) Result.success() else Result.retry() },
+            onFailure = { Result.retry() }
+        )
     }
 }

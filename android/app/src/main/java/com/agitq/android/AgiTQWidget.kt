@@ -33,8 +33,6 @@ import androidx.glance.layout.ContentScale
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
@@ -70,7 +68,7 @@ class SpxWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = loadData()
+        val data = loadData(context)
         provideContent {
             ResponsiveFullCard(context, data, CardKind.SPX, "아기티큐 200슨피단 SPX")
         }
@@ -85,7 +83,7 @@ class QqqWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = loadData()
+        val data = loadData(context)
         provideContent {
             ResponsiveFullCard(context, data, CardKind.QQQ, "아기티큐 200큐큐단 QQQ")
         }
@@ -100,7 +98,7 @@ class FgiWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = loadData()
+        val data = loadData(context)
         provideContent {
             ResponsiveFullCard(context, data, CardKind.FGI, "공포와 탐욕 지수 CNN FGI")
         }
@@ -111,22 +109,19 @@ class FgiWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FgiWidget()
 }
 
-private suspend fun loadData(): JSONObject? = withContext(Dispatchers.IO) {
-    runCatching { AgiTQApi.load() }.getOrNull()
-}
+private suspend fun loadData(context: Context): JSONObject? =
+    MarketSnapshotRepository.cachedOrRefresh(context)
 
-/** 우측 하단 수동 새로고침 버튼: 현재 누른 위젯만 즉시 다시 로드한다. */
+/** 우측 하단 수동 새로고침 버튼: 한 번 받아 세 위젯을 같은 데이터로 갱신한다. */
 class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(
         context: Context,
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        when (parameters[RefreshKindKey]) {
-            CardKind.SPX.name -> SpxWidget().update(context, glanceId)
-            CardKind.QQQ.name -> QqqWidget().update(context, glanceId)
-            CardKind.FGI.name -> FgiWidget().update(context, glanceId)
-        }
+        // 파라미터는 기존 Glance 액션 식별과 호환성을 위해 유지한다.
+        parameters[RefreshKindKey] ?: return
+        WidgetRefreshCoordinator.refreshAll(context)
     }
 }
 

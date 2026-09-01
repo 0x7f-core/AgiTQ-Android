@@ -1,4 +1,7 @@
 const CACHE_TTL = 300;
+const STALE_CACHE_TTL = 7 * 24 * 60 * 60;
+const UPSTREAM_TIMEOUT_MS = 12000;
+const UPSTREAM_ATTEMPTS = 2;
 
 const YAHOO = {
   SPX: 'https://query1.finance.yahoo.com/v8/finance/chart/^GSPC?range=500d&interval=1d',
@@ -35,6 +38,31 @@ function json(data, status = 200, extraHeaders = {}) {
       ...extraHeaders,
     },
   });
+}
+
+function cacheRequest(url, kind) {
+  const key = new URL(url);
+  key.search = '';
+  key.pathname = `/__agitq_cache/${kind}`;
+  return new Request(key.toString(), { method: 'GET' });
+}
+
+async function fetchWithRetry(url, options = {}, attempts = UPSTREAM_ATTEMPTS) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`${new URL(url).hostname} ${response.status}`);
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, 250 * attempt));
+    }
+  }
+  throw lastError;
 }
 
 function sma(data, period) {
@@ -122,8 +150,35 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
   return { name:`상단 밴드 위 ${daysAbove}일 차 (추세 유지)`, alert:false, lines:[['TQQQ','보유 유지'],['SPYM','추가 매수']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
 }
 
+// Yahoo 종목별 누락 거래일이 생겨도 같은 날짜끼리만 전략 계산에 사용한다.
+// 정상 응답에서는 원본 Scriptable의 인덱스 계산과 결과가 동일하다.
+function alignForSignal(sig, tqqq) {
+  const tqqqByTimestamp = new Map(
+    tqqq.timestamps.map((timestamp, index) => [timestamp, tqqq.closes[index]])
+  );
+  const timestamps = [];
+  const sigCloses = [];
+  const tqqqCloses = [];
+
+  sig.timestamps.forEach((timestamp, index) => {
+    const leveragedClose = tqqqByTimestamp.get(timestamp);
+    const signalClose = sig.closes[index];
+    if (Number.isFinite(signalClose) && Number.isFinite(leveragedClose)) {
+      timestamps.push(timestamp);
+      sigCloses.push(signalClose);
+      tqqqCloses.push(leveragedClose);
+    }
+  });
+
+  if (sigCloses.length < 200) throw new Error('Insufficient aligned market history');
+  return {
+    sig: { closes: sigCloses, timestamps },
+    tqqq: { closes: tqqqCloses, timestamps },
+  };
+}
+
 async function yahoo(url) {
-  const r = await fetch(url, {
+  const r = await fetchWithRetry(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0',
       'Accept': 'application/json',
@@ -142,17 +197,24 @@ async function yahoo(url) {
     }
   });
 
-  const mTime = res.meta.regularMarketTime;
-  const price = res.meta.regularMarketPrice;
+  const mTime = Number(res.meta.regularMarketTime);
+  const price = Number(res.meta.regularMarketPrice);
+  if (!Number.isFinite(mTime) || mTime <= 0 || !Number.isFinite(price) || price <= 0) {
+    throw new Error('Yahoo invalid market metadata');
+  }
   const day = x => new Intl.DateTimeFormat('en-US', {
     timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit'
   }).format(new Date(x * 1000));
 
-  if (timestamps.length && day(timestamps[timestamps.length-1]) === day(mTime)) {
+  if (timestamps.length && day(timestamps[timestamps.length - 1]) === day(mTime)) {
     closes[closes.length-1] = price;
   } else {
     closes.push(price);
     timestamps.push(mTime);
+  }
+
+  if (closes.length < 200 || closes.length !== timestamps.length) {
+    throw new Error('Yahoo insufficient history');
   }
 
   return { closes, timestamps, mTime, price };
@@ -167,19 +229,20 @@ function fgiRating(v) {
 }
 
 async function fetchFGI() {
-  const r = await fetch(FGI_URL, { headers: BROWSER_HEADERS });
-  if (!r.ok) throw new Error(`CNN ${r.status}`);
+  const r = await fetchWithRetry(FGI_URL, { headers: BROWSER_HEADERS });
   const j = await r.json();
 
   // The dated endpoint normally contains historical data. Keep only the
   // latest 90 points, matching the original Scriptable widget.
   const data = j.fear_and_greed_historical?.data || [];
   if (data.length > 0) {
-    return data.slice(-90).map(x => ({
-      x: x.x ?? x.date,
-      y: Number(x.y),
-      rating: x.rating || fgiRating(Number(x.y)),
-    }));
+    const history = data.slice(-90).map(x => ({
+        x: x.x ?? x.date,
+        y: Number(x.y),
+        rating: x.rating || fgiRating(Number(x.y)),
+      }))
+      .filter(x => x.x != null && Number.isFinite(x.y));
+    if (history.length) return history;
   }
 
   // Fallback for a response that exposes only the current aggregate object.
@@ -202,19 +265,42 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok:true, service:'AgiTQ API', version:'4.1' });
+      return json({ ok:true, service:'AgiTQ API', version:'4.20' });
     }
 
     if (url.pathname !== '/api/market') {
       return json({ error:'Not found' }, 404);
     }
 
+    const cache = caches.default;
+    const freshKey = cacheRequest(request.url, 'market-fresh');
+    const staleKey = cacheRequest(request.url, 'market-last-good');
+    const cached = await cache.match(freshKey);
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-AgiTQ-Cache', 'fresh');
+      return new Response(cached.body, { status: cached.status, headers });
+    }
+
+    const staleResponse = await cache.match(staleKey);
+    const staleData = staleResponse
+      ? await staleResponse.clone().json().catch(() => null)
+      : null;
+
     try {
-      const [spx, qqq, tqqq] = await Promise.all([
+      const results = await Promise.allSettled([
         yahoo(YAHOO.SPX),
         yahoo(YAHOO.QQQ),
         yahoo(YAHOO.TQQQ),
       ]);
+      const labels = ['SPX', 'QQQ', 'TQQQ'];
+      const failures = results
+        .map((result, index) => result.status === 'rejected'
+          ? `${labels[index]}: ${result.reason?.message || result.reason}`
+          : null)
+        .filter(Boolean);
+      if (failures.length) throw new Error(failures.join('; '));
+      const [spx, qqq, tqqq] = results.map(result => result.value);
 
       // FGI is kept separate so a temporary CNN block does not take down
       // the entire market API. This is important for Android widgets.
@@ -224,17 +310,22 @@ export default {
         fgi = await fetchFGI();
       } catch (e) {
         fgiError = e.message;
+        if (staleData?.FGI?.available && Array.isArray(staleData.FGI.history)) {
+          fgi = staleData.FGI.history;
+        }
       }
 
-      const spxSignal = analyzeSignal(spx, tqqq, 200, 'multi', .025, .025);
-      const qqqSignal = analyzeSignal(qqq, tqqq, 200, 'single', .02, .02);
+      const spxAligned = alignForSignal(spx, tqqq);
+      const qqqAligned = alignForSignal(qqq, tqqq);
+      const spxSignal = analyzeSignal(spxAligned.sig, spxAligned.tqqq, 200, 'multi', .025, .025);
+      const qqqSignal = analyzeSignal(qqqAligned.sig, qqqAligned.tqqq, 200, 'single', .02, .02);
       const latest = fgi[fgi.length-1];
       const avg30 = fgi.length
         ? fgi.slice(-30).reduce((s,d)=>s+d.y,0) / Math.min(30,fgi.length)
         : null;
 
-      return json({
-        version:'v4.1',
+      const payload = {
+        version:'v4.20',
         updated:new Date().toISOString(),
         SPX:{ price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal },
         QQQ:{ price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal },
@@ -247,8 +338,29 @@ export default {
           available: fgi.length > 0,
           error: fgiError,
         },
+      };
+
+      const response = json(payload, 200, { 'X-AgiTQ-Cache': 'upstream' });
+      const lastGood = json(payload, 200, {
+        'Cache-Control': `public, max-age=${STALE_CACHE_TTL}`,
+        'X-AgiTQ-Cache': 'last-good',
       });
+      ctx.waitUntil(Promise.all([
+        cache.put(freshKey, response.clone()),
+        cache.put(staleKey, lastGood),
+      ]));
+      return response;
     } catch (e) {
+      if (staleData) {
+        return json({
+          ...staleData,
+          cache: { stale: true, reason: e.message },
+        }, 200, {
+          'Cache-Control': 'public, max-age=60',
+          'X-AgiTQ-Cache': 'stale',
+          'Warning': '110 - "Response is stale"',
+        });
+      }
       return json({ error:'market_data_failed', message:e.message }, 502);
     }
   }

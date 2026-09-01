@@ -43,9 +43,16 @@ jobs:
           test -s app/agitq-release.p12
           chmod 600 app/agitq-release.p12
 
-      - name: Build release APK
+      - name: Check JavaScript syntax
+        run: |
+          node --input-type=module --check < cloudflare/worker.js
+          node --check web/js/api.js
+          node --check web/js/app.js
+          node --test cloudflare/worker.test.js
+
+      - name: Test, lint, and build release APK
         working-directory: android
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: gradle testReleaseUnitTest lintRelease assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK output
         working-directory: android

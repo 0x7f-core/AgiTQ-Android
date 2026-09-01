@@ -12,8 +12,8 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "4.19"
+        versionCode = 21
+        versionName = "4.20"
     }
 
     signingConfigs {
@@ -49,4 +49,7 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

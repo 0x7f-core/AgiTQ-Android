@@ -48,6 +48,15 @@ function etfClass(token) {
   return '';
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function fgiColor(v) {
   if (v >= 75) return C.extremeGreed;
   if (v >= 55) return C.greed;
@@ -214,11 +223,11 @@ function drawGauge(canvasId, value) {
 }
 
 function tokenMarkup(token, isAlert) {
-  if (isAlert) return `<span class="token-alert">${token}</span>`;
+  if (isAlert) return `<span class="token-alert">${escapeHtml(token)}</span>`;
   if (token.includes('·')) {
-    return token.split('·').map(part => `<span class="${etfClass(part)}">${part}</span>`).join('<span class="token-dot">·</span>');
+    return token.split('·').map(part => `<span class="${etfClass(part)}">${escapeHtml(part)}</span>`).join('<span class="token-dot">·</span>');
   }
-  return `<span class="${etfClass(token)}">${token}</span>`;
+  return `<span class="${etfClass(token)}">${escapeHtml(token)}</span>`;
 }
 
 function renderSignal(containerId, sig) {
@@ -229,8 +238,8 @@ function renderSignal(containerId, sig) {
   const rows = (sig.lines || []).slice(0, 2).map(row => {
     const token = row?.[0] ?? '';
     const action = row?.[1] ?? '';
-    if (isAlert) return `<div class="sig-row"><span class="token-alert">${token} ${action}</span></div>`;
-    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action">${action}</span></div>`;
+    if (isAlert) return `<div class="sig-row"><span class="token-alert">${escapeHtml(`${token} ${action}`)}</span></div>`;
+    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action">${escapeHtml(action)}</span></div>`;
   }).join('');
 
   const drawdown = Number(sig.drawdown);
@@ -239,7 +248,7 @@ function renderSignal(containerId, sig) {
     : 'TQQQ 최고점 대비 N/A';
 
   el.innerHTML = `${rows}
-    <div class="status-text" style="color:${isAlert ? C.alert : 'var(--status)'}">${sig.name || '-'}</div>
+    <div class="status-text" style="color:${isAlert ? C.alert : 'var(--status)'}">${escapeHtml(sig.name || '-')}</div>
     <div class="dd-text">${dd}</div>`;
 }
 
@@ -248,6 +257,8 @@ function renderFGI(fgi) {
   const statsEl = document.getElementById('fgi-stats-text');
 
   if (!fgi || fgi.available === false || !Number.isFinite(Number(fgi.value))) {
+    getHDContext('fgiHistoryChart', 480, 300);
+    getHDContext('fgiGauge', 320, 180);
     ratingEl.textContent = 'FGI 데이터 없음';
     ratingEl.style.color = C.p2;
     statsEl.textContent = '';
@@ -270,28 +281,51 @@ function renderFGI(fgi) {
     <span style="color:${avgColor}">30일 평균 ${avgText}</span>`;
 }
 
-async function renderDashboard() {
+let activeRequest = null;
+let requestSequence = 0;
+
+async function renderDashboard({ force = false } = {}) {
+  if (activeRequest && !force) return activeRequest.promise;
+  if (activeRequest && force) activeRequest.controller.abort();
+
+  const controller = new AbortController();
+  const sequence = ++requestSequence;
   const errorEl = document.getElementById('error-text');
   errorEl.textContent = '';
 
-  try {
-    const data = await getMarket();
-    document.getElementById('spx-updated').textContent = formatMarketTime(data.SPX?.mTime);
-    document.getElementById('qqq-updated').textContent = formatMarketTime(data.QQQ?.mTime);
+  const promise = (async () => {
+    try {
+      const data = await getMarket({ signal: controller.signal });
+      if (sequence !== requestSequence) return;
+      document.getElementById('spx-updated').textContent = formatMarketTime(data.SPX?.mTime);
+      document.getElementById('qqq-updated').textContent = formatMarketTime(data.QQQ?.mTime);
 
-    drawBandChart('spxChart', data.SPX?.closes || [], .025, .025);
-    drawBandChart('qqqChart', data.QQQ?.closes || [], .02, .02);
-    renderSignal('spx-info', data.SPX?.signal);
-    renderSignal('qqq-info', data.QQQ?.signal);
-    renderFGI(data.FGI);
-  } catch (error) {
-    console.error(error);
-    errorEl.textContent = `데이터 연결 오류: ${error?.message || error}`;
-  }
+      drawBandChart('spxChart', data.SPX?.closes || [], .025, .025);
+      drawBandChart('qqqChart', data.QQQ?.closes || [], .02, .02);
+      renderSignal('spx-info', data.SPX?.signal);
+      renderSignal('qqq-info', data.QQQ?.signal);
+      renderFGI(data.FGI);
+
+      if (data.cache?.stale) {
+        errorEl.textContent = '새 데이터 연결 지연: 마지막 정상 데이터를 표시합니다.';
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      console.error(error);
+      if (sequence === requestSequence) {
+        errorEl.textContent = `데이터 연결 오류: ${error?.message || error}`;
+      }
+    } finally {
+      if (activeRequest?.sequence === sequence) activeRequest = null;
+    }
+  })();
+
+  activeRequest = { controller, promise, sequence };
+  return promise;
 }
 
 renderDashboard();
-setInterval(renderDashboard, 300000);
+setInterval(() => renderDashboard(), 300000);
 
 
 const manualRefreshButton = document.getElementById('manual-refresh');
@@ -302,7 +336,7 @@ if (manualRefreshButton) {
     manualRefreshButton.classList.add('refreshing');
     manualRefreshButton.textContent = '↻ 새로고침 중...';
     try {
-      await renderDashboard();
+      await renderDashboard({ force: true });
     } finally {
       manualRefreshButton.disabled = false;
       manualRefreshButton.classList.remove('refreshing');

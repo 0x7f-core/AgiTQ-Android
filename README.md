@@ -5,7 +5,7 @@ Scriptable v3.0-γ strategy port for Android, Web and Cloudflare Worker.
 ## Structure
 
 - `web/` — GitHub Pages dashboard
-- `android/` — Android app + home-screen widget
+- `android/` — Android app + independent SPX/QQQ/FGI home-screen widgets
 - `cloudflare/` — Cloudflare Worker API proxy and shared strategy calculation
 - `.github/workflows/` — GitHub Actions for web deployment and APK builds
 
@@ -25,7 +25,7 @@ Deploy `cloudflare/worker.js` as a Cloudflare Worker. The public endpoint must b
 
 `https://YOUR-WORKER.workers.dev/api/market`
 
-The Worker fetches Yahoo Finance and CNN FGI data and returns one JSON payload to both the website and Android widget.
+The Worker fetches Yahoo Finance and CNN FGI data and returns one validated JSON payload to both the website and Android widgets. It keeps a five-minute edge cache and a seven-day last-known-good response for temporary upstream failures.
 
 ### 2. Connect the web dashboard
 
@@ -47,8 +47,10 @@ The `deploy-web.yml` workflow publishes `web/` to GitHub Pages after pushes to `
 
 ### 5. APK
 
-The `build-apk.yml` workflow builds `android/app/build/outputs/apk/release/app-release.apk` and uploads it as a GitHub Actions artifact.
+The `build-apk.yml` workflow runs Android unit tests, lint, JavaScript syntax checks, builds `android/app/build/outputs/apk/release/app-release.apk`, and uploads it as a GitHub Actions artifact.
 
 ## Important
 
-This is the first Android/Web port. The strategy logic is intentionally kept close to the supplied Scriptable code. Android launcher widgets have platform-specific layout limitations, so the first widget implementation prioritizes the same data, status and action information. Chart/bitmap rendering can be upgraded in the next pass to more closely reproduce the Scriptable charts and FGI gauge.
+The strategy logic, Korean labels, colors, chart ranges and signal thresholds intentionally stay close to the supplied Scriptable code. The original Scriptable source is reference-only and is not modified.
+
+Android stores only validated snapshots. Automatic and manual refreshes make one API request and then update all three widgets from the same snapshot. If a refresh fails, the last valid display remains in place. Automatic refresh is routed only through WorkManager and runs during the US regular session; manual refresh remains available at any time.
