@@ -246,7 +246,9 @@ private fun marketCardBitmap(
             drawMarketChartScriptable(canvas, asset, bandPct, chartArea)
 
             val signalX = width * 0.56f
-            val signalTop = contentTop + (bottom - contentTop) * 0.06f
+            // 웹의 info-box처럼 네 문단 묶음의 시각적 중심을 차트 중심에 맞춘다.
+            // v4.21 실기기 캡처 기준 약 46px 아래로 이동하며 wide 배치에만 적용된다.
+            val signalTop = contentTop + (bottom - contentTop) * 0.225f
             val signalWidth = width - signalX - pad
             drawSignalBlockResponsive(
                 canvas = canvas,
