@@ -118,7 +118,7 @@ canvas{display:block;max-width:100%}
 .sig-row{
   color:var(--p1);
   font-size:clamp(17px,2.65vw,31px);
-  line-height:1.36;
+  line-height:1.35;
   font-weight:700;
   letter-spacing:-.3px;
   white-space:nowrap;
@@ -131,7 +131,6 @@ canvas{display:block;max-width:100%}
 .token-alert{color:var(--alert)}
 
 .status-text{
-  margin-top:10px;
   color:var(--status);
   font-size:clamp(12px,1.7vw,21px);
   line-height:1.25;
@@ -141,7 +140,6 @@ canvas{display:block;max-width:100%}
 }
 
 .dd-text{
-  margin-top:11px;
   color:var(--p1);
   font-size:clamp(14px,1.95vw,24px);
   line-height:1.2;
@@ -149,6 +147,12 @@ canvas{display:block;max-width:100%}
   letter-spacing:-.25px;
   white-space:nowrap;
 }
+
+/* Scriptable 원본: SPX 2pt/3pt, QQQ 3pt/4pt spacer 비율. */
+#spx-info .status-text{margin-top:.2em}
+#spx-info .dd-text{margin-top:.272727em}
+#qqq-info .status-text{margin-top:.272727em}
+#qqq-info .dd-text{margin-top:.363636em}
 
 .fgi-card{padding-top:20px}
 .fgi-row{padding-top:8px}
@@ -210,8 +214,8 @@ canvas{display:block;max-width:100%}
   .updated-time{font-size:clamp(9px,2.55vw,12px);margin-top:4px}
   .content-row{gap:6px;padding-top:3px}
   .sig-row{font-size:clamp(12px,3.65vw,17px)}
-  .status-text{font-size:clamp(9px,2.55vw,12px);margin-top:5px}
-  .dd-text{font-size:clamp(10px,2.9vw,13px);margin-top:6px}
+  .status-text{font-size:clamp(9px,2.55vw,12px)}
+  .dd-text{font-size:clamp(10px,2.9vw,13px)}
   .fgi-rating{font-size:clamp(12px,3.6vw,17px);margin-top:2px}
   .fgi-stats{font-size:clamp(10px,2.9vw,14px);gap:3px;margin-top:5px}
   .fgi-info-box canvas{width:100%}
