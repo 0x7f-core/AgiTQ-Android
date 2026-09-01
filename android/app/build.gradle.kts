@@ -12,8 +12,8 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "4.4"
+        versionCode = 6
+        versionName = "4.5"
     }
 
     signingConfigs {
@@ -28,9 +28,6 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Use a repository-specific, persistent signing key supplied by
-            // GitHub Actions secrets. Keeping the same key allows future APKs
-            // to update the installed app without uninstalling it first.
             signingConfig = signingConfigs.getByName("release")
         }
     }
