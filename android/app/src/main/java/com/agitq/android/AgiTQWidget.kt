@@ -15,9 +15,11 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.ContentScale
@@ -32,17 +34,17 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
-private const val CARD_W = 900
-private const val CARD_H = 520
 private const val SCRIPTABLE_VERSION = "v3.0-γ (26.08.12)"
+private const val TARGET_BITMAP_AREA = 500_000.0
 
 private val COLOR_BG = AndroidColor.BLACK
 private val COLOR_WHITE = AndroidColor.WHITE
 private val COLOR_P2 = AndroidColor.rgb(170, 170, 170)
 private val COLOR_DOT = AndroidColor.rgb(102, 102, 102)
-private val COLOR_DIVIDER = AndroidColor.rgb(51, 51, 51)
 private val COLOR_TQQQ = AndroidColor.rgb(232, 113, 79)
 private val COLOR_SPYM = AndroidColor.rgb(176, 124, 192)
 private val COLOR_SGOV = AndroidColor.rgb(91, 184, 232)
@@ -51,13 +53,17 @@ private val COLOR_UPPER = AndroidColor.rgb(224, 112, 192)
 private val COLOR_LOWER = AndroidColor.rgb(175, 212, 133)
 private val COLOR_ALERT = AndroidColor.rgb(255, 77, 77)
 
+private enum class CardKind { SPX, QQQ, FGI }
+private enum class LayoutMode { WIDE, STACKED, TALL }
+
 class SpxWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        val card = data?.optJSONObject("SPX")?.let {
-            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025)
-        } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "아기티큐 200슨피단 SPX") }
+        provideContent {
+            ResponsiveFullCard(context, data, CardKind.SPX, "아기티큐 200슨피단 SPX")
+        }
     }
 }
 
@@ -66,12 +72,13 @@ class SpxWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 class QqqWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        val card = data?.optJSONObject("QQQ")?.let {
-            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02)
-        } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "아기티큐 200큐큐단 QQQ") }
+        provideContent {
+            ResponsiveFullCard(context, data, CardKind.QQQ, "아기티큐 200큐큐단 QQQ")
+        }
     }
 }
 
@@ -80,10 +87,13 @@ class QqqWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 class FgiWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
-        val card = data?.optJSONObject("FGI")?.let { fgiCardBitmap(it) } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "공포와 탐욕 지수 CNN FGI") }
+        provideContent {
+            ResponsiveFullCard(context, data, CardKind.FGI, "공포와 탐욕 지수 CNN FGI")
+        }
     }
 }
 
@@ -96,7 +106,29 @@ private suspend fun loadData(): JSONObject? = withContext(Dispatchers.IO) {
 }
 
 @Composable
-private fun FullCard(context: Context, bitmap: Bitmap, description: String) {
+private fun ResponsiveFullCard(
+    context: Context,
+    data: JSONObject?,
+    kind: CardKind,
+    description: String
+) {
+    val glanceSize = LocalSize.current
+    val aspect = (glanceSize.width.value / glanceSize.height.value)
+        .coerceIn(0.35f, 4.0f)
+    val (bitmapW, bitmapH) = bitmapDimensions(aspect)
+
+    val bitmap = when (kind) {
+        CardKind.SPX -> data?.optJSONObject("SPX")?.let {
+            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025, bitmapW, bitmapH)
+        }
+        CardKind.QQQ -> data?.optJSONObject("QQQ")?.let {
+            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02, bitmapW, bitmapH)
+        }
+        CardKind.FGI -> data?.optJSONObject("FGI")?.let {
+            fgiCardBitmap(it, bitmapW, bitmapH)
+        }
+    } ?: errorCardBitmap(bitmapW, bitmapH)
+
     Image(
         provider = ImageProvider(bitmap),
         contentDescription = description,
@@ -107,6 +139,21 @@ private fun FullCard(context: Context, bitmap: Bitmap, description: String) {
     )
 }
 
+private fun bitmapDimensions(aspect: Float): Pair<Int, Int> {
+    val w = sqrt(TARGET_BITMAP_AREA * aspect).roundToInt().coerceAtLeast(320)
+    val h = (w / aspect).roundToInt().coerceAtLeast(260)
+    return w to h
+}
+
+private fun layoutMode(width: Int, height: Int): LayoutMode {
+    val aspect = width.toFloat() / height.toFloat()
+    return when {
+        aspect >= 1.45f -> LayoutMode.WIDE
+        aspect >= 0.78f -> LayoutMode.STACKED
+        else -> LayoutMode.TALL
+    }
+}
+
 private fun dashboardIntent(context: Context): Intent = Intent(context, MainActivity::class.java).apply {
     action = "com.agitq.android.action.OPEN_DASHBOARD"
     data = Uri.parse("agitq://dashboard")
@@ -114,31 +161,105 @@ private fun dashboardIntent(context: Context): Intent = Intent(context, MainActi
 }
 
 /**
- * SPX/QQQ 독립 카드.
- * 원본 iOS Scriptable Medium/Large 상단의 정보 구조를 그대로 사용한다:
- * 제목 + 버전 / 미국 동부 기준 시각 / 왼쪽 90일 밴드 차트 / 오른쪽 전략 신호.
+ * SPX/QQQ 독립 카드. 위젯의 실제 가로/세로 비율에 맞춰 Bitmap 자체의 비율과
+ * 내부 레이아웃을 함께 바꾼다. 따라서 One UI에서 자유롭게 리사이즈해도 단순 늘림이 없다.
  */
-private fun marketCardBitmap(asset: JSONObject, title: String, bandPct: Double): Bitmap {
-    val bitmap = Bitmap.createBitmap(CARD_W, CARD_H, Bitmap.Config.ARGB_8888)
+private fun marketCardBitmap(
+    asset: JSONObject,
+    title: String,
+    bandPct: Double,
+    width: Int,
+    height: Int
+): Bitmap {
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
 
+    val mode = layoutMode(width, height)
+    val short = min(width, height).toFloat()
+    val pad = short * 0.055f
+    val titleSize = (short * 0.0615f).coerceIn(22f, 38f)
+    val versionSize = (short * 0.0365f).coerceIn(13f, 22f)
+    val timeSize = (short * 0.0405f).coerceIn(15f, 25f)
+    val titleY = pad + titleSize
+
+    drawText(canvas, title, pad, titleY, titleSize, COLOR_WHITE, true)
+    drawText(canvas, SCRIPTABLE_VERSION, width - pad, titleY - 2f, versionSize, COLOR_P2, false, Paint.Align.RIGHT)
+
+    val timeY = titleY + timeSize * 1.45f
+    drawText(canvas, formatMarketTime(asset.optLong("mTime", 0L)), pad, timeY, timeSize, COLOR_WHITE)
+
     val sig = asset.optJSONObject("signal")
+    val contentTop = timeY + pad * 0.55f
+    val bottom = height - pad * 0.75f
 
-    drawText(canvas, title, 30f, 48f, 32f, COLOR_WHITE, true)
-    drawText(canvas, SCRIPTABLE_VERSION, CARD_W - 30f, 46f, 19f, COLOR_P2, false, Paint.Align.RIGHT)
-    drawText(canvas, formatMarketTime(asset.optLong("mTime", 0L)), 30f, 86f, 21f, COLOR_WHITE)
+    when (mode) {
+        LayoutMode.WIDE -> {
+            val split = width * 0.565f
+            val chartArea = RectF(pad * 0.78f, contentTop, split, bottom)
+            drawMarketChartScriptable(canvas, asset, bandPct, chartArea)
 
-    // One UI cards have a little more horizontal breathing room than iOS.
-    // Enlarge the chart and pull the strategy block slightly left so the visual weight
-    // remains close to the original Scriptable medium/large layout.
-    drawMarketChartScriptable(canvas, asset, bandPct, RectF(24f, 118f, 480f, 402f))
-    drawSignalBlock(canvas, sig, 478f, 148f)
+            val signalX = width * 0.575f
+            val signalTop = contentTop + (bottom - contentTop) * 0.06f
+            val signalWidth = width - signalX - pad
+            drawSignalBlockResponsive(
+                canvas = canvas,
+                sig = sig,
+                x = signalX,
+                top = signalTop,
+                maxWidth = signalWidth,
+                short = short,
+                densityFactor = 1f
+            )
+        }
+
+        LayoutMode.STACKED -> {
+            val remain = bottom - contentTop
+            val chartBottom = contentTop + remain * 0.54f
+            drawMarketChartScriptable(
+                canvas,
+                asset,
+                bandPct,
+                RectF(pad * 0.75f, contentTop, width - pad * 0.75f, chartBottom)
+            )
+
+            drawSignalBlockResponsive(
+                canvas = canvas,
+                sig = sig,
+                x = pad,
+                top = chartBottom + pad * 0.30f,
+                maxWidth = width - pad * 2f,
+                short = short,
+                densityFactor = 0.82f
+            )
+        }
+
+        LayoutMode.TALL -> {
+            val remain = bottom - contentTop
+            val chartBottom = contentTop + remain * 0.46f
+            drawMarketChartScriptable(
+                canvas,
+                asset,
+                bandPct,
+                RectF(pad * 0.72f, contentTop, width - pad * 0.72f, chartBottom)
+            )
+
+            drawSignalBlockResponsive(
+                canvas = canvas,
+                sig = sig,
+                x = pad,
+                top = chartBottom + pad * 0.45f,
+                maxWidth = width - pad * 2f,
+                short = short,
+                densityFactor = 0.75f
+            )
+        }
+    }
 
     return bitmap
 }
 
-/** 원본 Scriptable drawBandChart(500x300)의 비율/색/선 굵기를 카드 크기에 맞게 재현. */
+/** 원본 Scriptable drawBandChart의 색/형태를 유지하면서 주어진 영역 비율에 맞춰 다시 계산. */
 private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct: Double, area: RectF) {
     val arr = asset.optJSONArray("closes") ?: return
     val closes = ArrayList<Double>(arr.length())
@@ -178,7 +299,9 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
     fun x(i: Int): Float = plot.left + if (prices.size <= 1) 0f else i.toFloat() / (prices.size - 1) * plot.width()
     fun y(v: Double): Float = plot.bottom - ((v - minV) / (maxV - minV) * plot.height()).toFloat()
 
-    fun series(data: List<Double?>, color: Int, width: Float) {
+    val lineScale = min(area.width() / 456f, area.height() / 284f).coerceIn(0.55f, 1.65f)
+
+    fun series(data: List<Double?>, color: Int, widthPx: Float) {
         val path = Path()
         var started = false
         data.forEachIndexed { i, v ->
@@ -198,7 +321,7 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
         canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.STROKE
-            strokeWidth = width
+            strokeWidth = widthPx * lineScale
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         })
@@ -209,32 +332,62 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
     series(prices.map { it }, COLOR_CP, 6.0f)
 }
 
-private fun drawSignalBlock(canvas: Canvas, sig: JSONObject?, x: Float, top: Float) {
+private fun drawSignalBlockResponsive(
+    canvas: Canvas,
+    sig: JSONObject?,
+    x: Float,
+    top: Float,
+    maxWidth: Float,
+    short: Float,
+    densityFactor: Float
+) {
     if (sig == null) return
     val isAlert = sig.optBoolean("alert", false)
     val lines = sig.optJSONArray("lines")
-    var y = top + 52f
+    val rowSize = (short * 0.067f * densityFactor).coerceIn(20f, 38f)
+    val rowGap = rowSize * 1.62f
+    var y = top + rowSize
 
     if (lines != null) {
         for (i in 0 until min(lines.length(), 2)) {
             val row = lines.optJSONArray(i) ?: continue
-            drawSignalRow(canvas, row.optString(0), row.optString(1), x, y, 35f, isAlert)
-            y += 58f
+            drawSignalRow(
+                canvas,
+                row.optString(0),
+                row.optString(1),
+                x,
+                y,
+                rowSize,
+                isAlert,
+                maxWidth
+            )
+            y += rowGap
         }
     }
 
-    y += 12f
-    drawText(
+    y += rowSize * 0.30f
+    drawFittedText(
         canvas,
         sig.optString("name", "-"),
         x,
         y,
-        23f,
-        if (isAlert) COLOR_ALERT else COLOR_P2
+        rowSize * 0.66f,
+        if (isAlert) COLOR_ALERT else COLOR_P2,
+        false,
+        maxWidth
     )
 
-    y += 52f
-    drawText(canvas, drawdownText(sig), x, y, 27f, COLOR_WHITE, true)
+    y += rowSize * 1.48f
+    drawFittedText(
+        canvas,
+        drawdownText(sig),
+        x,
+        y,
+        rowSize * 0.78f,
+        COLOR_WHITE,
+        true,
+        maxWidth
+    )
 }
 
 private fun drawSignalRow(
@@ -243,15 +396,16 @@ private fun drawSignalRow(
     action: String,
     startX: Float,
     baseline: Float,
-    size: Float,
-    isAlert: Boolean
+    requestedSize: Float,
+    isAlert: Boolean,
+    maxWidth: Float
 ) {
+    val size = fitSignalRowSize(token, action, requestedSize, isAlert, maxWidth)
     var x = startX
     val boldPaint = textPaint(size, COLOR_WHITE, true)
 
     if (isAlert) {
-        val line = "$token $action"
-        drawText(canvas, line, x, baseline, size, COLOR_ALERT, true)
+        drawText(canvas, "$token $action", x, baseline, size, COLOR_ALERT, true)
         return
     }
 
@@ -270,42 +424,169 @@ private fun drawSignalRow(
     drawText(canvas, action, x, baseline, size, COLOR_WHITE, true)
 }
 
-/**
- * FGI 독립 카드.
- * 원본 Scriptable Large 하단 FGI 블록을 그대로 독립 카드로 확장한다:
- * 왼쪽 90일 히스토리 + 오른쪽 게이지/등급/현재값/30일 평균.
- */
-private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
-    val bitmap = Bitmap.createBitmap(CARD_W, CARD_H, Bitmap.Config.ARGB_8888)
+private fun fitSignalRowSize(
+    token: String,
+    action: String,
+    requestedSize: Float,
+    isAlert: Boolean,
+    maxWidth: Float
+): Float {
+    if (maxWidth <= 1f) return requestedSize
+    val paint = textPaint(requestedSize, COLOR_WHITE, true)
+    val text = if (isAlert) "$token $action" else "$token  $action"
+    val measured = paint.measureText(text)
+    if (measured <= maxWidth) return requestedSize
+    return (requestedSize * maxWidth / measured).coerceAtLeast(requestedSize * 0.64f)
+}
+
+/** FGI도 wide/stacked/tall 세 가지 배치로 재구성한다. */
+private fun fgiCardBitmap(fgi: JSONObject, width: Int, height: Int): Bitmap {
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
 
     val value = fgi.optDouble("value", Double.NaN)
-    if (!value.isFinite()) return errorCardBitmap()
+    if (!value.isFinite()) return errorCardBitmap(width, height)
     val avg30 = fgi.optDouble("avg30", Double.NaN)
     val rating = fgiRatingFull(fgi.optString("rating"))
 
-    drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", 30f, 50f, 32f, COLOR_WHITE, true)
+    val mode = layoutMode(width, height)
+    val short = min(width, height).toFloat()
+    val pad = short * 0.055f
+    val titleSize = (short * 0.0615f).coerceIn(22f, 38f)
+    val titleY = pad + titleSize
+    drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", pad, titleY, titleSize, COLOR_WHITE, true)
 
-    drawFgiHistoryScriptable(canvas, fgi, RectF(30f, 118f, 468f, 440f))
-    drawFgiGaugeScriptable(canvas, value, RectF(520f, 115f, 870f, 312f))
+    val contentTop = titleY + pad * 0.75f
+    val bottom = height - pad * 0.75f
 
-    drawText(
-        canvas,
-        rating,
-        695f,
-        366f,
-        31f,
-        fgiAndroidColor(value),
-        true,
-        Paint.Align.CENTER
-    )
+    when (mode) {
+        LayoutMode.WIDE -> {
+            val historyRight = width * 0.535f
+            drawFgiHistoryScriptable(
+                canvas,
+                fgi,
+                RectF(pad, contentTop + pad * 0.25f, historyRight, bottom)
+            )
 
-    drawFgiStats(canvas, value, avg30, 695f, 424f, 26f)
+            val rightCenter = width * 0.775f
+            val rightLeft = width * 0.575f
+            val rightRight = width - pad
+            val gaugeBottom = contentTop + (bottom - contentTop) * 0.56f
+            drawFgiGaugeScriptable(
+                canvas,
+                value,
+                RectF(rightLeft, contentTop, rightRight, gaugeBottom)
+            )
+
+            val ratingY = contentTop + (bottom - contentTop) * 0.72f
+            val ratingSize = (short * 0.059f).coerceIn(22f, 35f)
+            drawFittedCenteredText(
+                canvas,
+                rating,
+                rightCenter,
+                ratingY,
+                ratingSize,
+                fgiAndroidColor(value),
+                true,
+                rightRight - rightLeft
+            )
+
+            drawFgiStats(
+                canvas,
+                value,
+                avg30,
+                rightCenter,
+                contentTop + (bottom - contentTop) * 0.90f,
+                (short * 0.050f).coerceIn(18f, 30f),
+                rightRight - rightLeft
+            )
+        }
+
+        LayoutMode.STACKED -> {
+            val remain = bottom - contentTop
+            val historyBottom = contentTop + remain * 0.43f
+            drawFgiHistoryScriptable(
+                canvas,
+                fgi,
+                RectF(pad, contentTop, width - pad, historyBottom)
+            )
+
+            val gaugeTop = historyBottom + pad * 0.10f
+            val gaugeBottom = gaugeTop + remain * 0.30f
+            drawFgiGaugeScriptable(
+                canvas,
+                value,
+                RectF(pad * 1.5f, gaugeTop, width - pad * 1.5f, gaugeBottom)
+            )
+
+            val centerX = width / 2f
+            val ratingY = gaugeBottom + short * 0.060f
+            drawFittedCenteredText(
+                canvas,
+                rating,
+                centerX,
+                ratingY,
+                (short * 0.055f).coerceIn(20f, 34f),
+                fgiAndroidColor(value),
+                true,
+                width - pad * 2f
+            )
+            drawFgiStats(
+                canvas,
+                value,
+                avg30,
+                centerX,
+                min(bottom, ratingY + short * 0.085f),
+                (short * 0.044f).coerceIn(17f, 28f),
+                width - pad * 2f
+            )
+        }
+
+        LayoutMode.TALL -> {
+            val remain = bottom - contentTop
+            val historyBottom = contentTop + remain * 0.38f
+            drawFgiHistoryScriptable(
+                canvas,
+                fgi,
+                RectF(pad, contentTop, width - pad, historyBottom)
+            )
+
+            val gaugeTop = historyBottom + pad * 0.20f
+            val gaugeBottom = gaugeTop + remain * 0.28f
+            drawFgiGaugeScriptable(
+                canvas,
+                value,
+                RectF(pad, gaugeTop, width - pad, gaugeBottom)
+            )
+
+            val centerX = width / 2f
+            val ratingY = gaugeBottom + short * 0.075f
+            drawFittedCenteredText(
+                canvas,
+                rating,
+                centerX,
+                ratingY,
+                (short * 0.055f).coerceIn(20f, 34f),
+                fgiAndroidColor(value),
+                true,
+                width - pad * 1.5f
+            )
+            drawFgiStats(
+                canvas,
+                value,
+                avg30,
+                centerX,
+                min(bottom, ratingY + short * 0.095f),
+                (short * 0.043f).coerceIn(16f, 27f),
+                width - pad * 1.5f
+            )
+        }
+    }
+
     return bitmap
 }
 
-/** 원본 Scriptable drawFGIChart(480x300): 25/50/75 기준선 + 반투명 흰 선 + 값별 컬러 점. */
 private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: RectF) {
     val arr = fgi.optJSONArray("history") ?: return
     if (arr.length() < 2) return
@@ -327,9 +608,10 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     fun toX(i: Int): Float = plot.left + i.toFloat() / (values.size - 1) * plot.width()
     fun toY(v: Double): Float = plot.top + ((100.0 - v) / 100.0 * plot.height()).toFloat()
 
+    val scale = min(area.width() / 480f, area.height() / 300f).coerceIn(0.55f, 1.8f)
     val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.argb(51, 170, 170, 170)
-        strokeWidth = 1.5f
+        strokeWidth = 1.5f * scale
     }
     listOf(25.0, 50.0, 75.0).forEach { level ->
         val y = toY(level)
@@ -345,7 +627,7 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.argb(102, 255, 255, 255)
         style = Paint.Style.STROKE
-        strokeWidth = 2.8f
+        strokeWidth = 2.8f * scale
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     })
@@ -354,17 +636,17 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
         canvas.drawCircle(
             toX(i),
             toY(v),
-            4.6f,
+            4.6f * scale,
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(v) }
         )
     }
 }
 
-/** 원본 Scriptable drawGauge(320x180)를 좌표 스케일링해서 동일하게 재현. */
 private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
     val baseW = 320f
     val baseH = 180f
     val scale = min(area.width() / baseW, area.height() / baseH)
+    if (scale <= 0f) return
     val ox = area.centerX() - baseW * scale / 2f
     val oy = area.centerY() - baseH * scale / 2f
 
@@ -419,15 +701,33 @@ private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
     )
 }
 
-private fun drawFgiStats(canvas: Canvas, value: Double, avg30: Double, centerX: Float, baseline: Float, size: Float) {
+private fun drawFgiStats(
+    canvas: Canvas,
+    value: Double,
+    avg30: Double,
+    centerX: Float,
+    baseline: Float,
+    requestedSize: Float,
+    maxWidth: Float
+) {
     val now = "현재 ${value.toInt()}"
     val slash = " / "
     val avg = if (avg30.isFinite()) "30일 평균 ${avg30.toInt()}" else "30일 평균 -"
 
+    var size = requestedSize
+    fun totalWidth(s: Float): Float =
+        textPaint(s, fgiAndroidColor(value), true).measureText(now) +
+            textPaint(s + 2f, COLOR_WHITE, true).measureText(slash) +
+            textPaint(s, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2, true).measureText(avg)
+
+    val initialWidth = totalWidth(size)
+    if (initialWidth > maxWidth && initialWidth > 0f) {
+        size = (size * maxWidth / initialWidth).coerceAtLeast(size * 0.65f)
+    }
+
     val nowPaint = textPaint(size, fgiAndroidColor(value), true)
     val slashPaint = textPaint(size + 2f, COLOR_WHITE, true)
     val avgPaint = textPaint(size, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2, true)
-
     val total = nowPaint.measureText(now) + slashPaint.measureText(slash) + avgPaint.measureText(avg)
     var x = centerX - total / 2f
 
@@ -438,13 +738,50 @@ private fun drawFgiStats(canvas: Canvas, value: Double, avg30: Double, centerX: 
     canvas.drawText(avg, x, baseline, avgPaint)
 }
 
-private fun errorCardBitmap(): Bitmap {
-    val bitmap = Bitmap.createBitmap(CARD_W, CARD_H, Bitmap.Config.ARGB_8888)
+private fun errorCardBitmap(width: Int, height: Int): Bitmap {
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
-    drawText(canvas, "AgiTQ", CARD_W / 2f, 235f, 44f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, "데이터 로드 실패", CARD_W / 2f, 290f, 28f, COLOR_ALERT, true, Paint.Align.CENTER)
+    val short = min(width, height).toFloat()
+    drawText(canvas, "AgiTQ", width / 2f, height / 2f - short * 0.03f, short * 0.085f, COLOR_WHITE, true, Paint.Align.CENTER)
+    drawText(canvas, "데이터 로드 실패", width / 2f, height / 2f + short * 0.07f, short * 0.055f, COLOR_ALERT, true, Paint.Align.CENTER)
     return bitmap
+}
+
+private fun drawFittedText(
+    canvas: Canvas,
+    text: String,
+    x: Float,
+    y: Float,
+    requestedSize: Float,
+    color: Int,
+    bold: Boolean,
+    maxWidth: Float
+) {
+    var size = requestedSize
+    val measured = textPaint(size, color, bold).measureText(text)
+    if (measured > maxWidth && measured > 0f) {
+        size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
+    }
+    drawText(canvas, text, x, y, size, color, bold)
+}
+
+private fun drawFittedCenteredText(
+    canvas: Canvas,
+    text: String,
+    centerX: Float,
+    y: Float,
+    requestedSize: Float,
+    color: Int,
+    bold: Boolean,
+    maxWidth: Float
+) {
+    var size = requestedSize
+    val measured = textPaint(size, color, bold).measureText(text)
+    if (measured > maxWidth && measured > 0f) {
+        size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
+    }
+    drawText(canvas, text, centerX, y, size, color, bold, Paint.Align.CENTER)
 }
 
 private fun drawText(
@@ -483,12 +820,13 @@ private fun drawdownText(sig: JSONObject?): String {
     }
 }
 
+/** 모든 Android 위젯의 기준시각은 한국 표준시(KST)로 표시. */
 private fun formatMarketTime(epochSeconds: Long): String {
     if (epochSeconds <= 0L) return "-"
     return runCatching {
         DateTimeFormatter
-            .ofPattern("yy.MM.dd. HH:mm '기준'", Locale.KOREA)
-            .withZone(ZoneId.of("America/New_York"))
+            .ofPattern("yy.MM.dd. HH:mm '한국시간'", Locale.KOREA)
+            .withZone(ZoneId.of("Asia/Seoul"))
             .format(Instant.ofEpochSecond(epochSeconds))
     }.getOrDefault("-")
 }
