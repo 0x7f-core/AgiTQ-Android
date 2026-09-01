@@ -16,7 +16,6 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
-import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -122,10 +121,9 @@ private fun MediumView(data: JSONObject) {
 @Composable
 private fun LargeView(data: JSONObject) {
     val spx = data.optJSONObject("SPX") ?: JSONObject()
-    val qqq = data.optJSONObject("QQQ") ?: JSONObject()
     val fgi = data.optJSONObject("FGI") ?: JSONObject()
     val spxSig = spx.optJSONObject("signal") ?: JSONObject()
-    val qqqSig = qqq.optJSONObject("signal") ?: JSONObject()
+    val qqq = data.optJSONObject("QQQ") ?: JSONObject()
     val value = fgi.optDouble("value", 0.0)
 
     Column(modifier = GlanceModifier.fillMaxWidth()) {
@@ -148,9 +146,6 @@ private fun LargeView(data: JSONObject) {
         Spacer(GlanceModifier.height(2.dp))
         Text(fgiBar(value), style = TextStyle(color = fgiColor(value), fontSize = 8.sp))
         Text("FGI 30일 평균 ${fgi.optDouble("avg30", 0.0).toInt()}", style = TextStyle(color = gray, fontSize = 8.sp))
-
-        // QQQ signal remains available in the payload for future expanded layouts.
-        qqqSig.optString("name", "")
     }
 }
 
