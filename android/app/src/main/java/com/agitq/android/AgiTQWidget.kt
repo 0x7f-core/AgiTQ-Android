@@ -8,11 +8,11 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
-import androidx.glance.Alignment
 import androidx.glance.background
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -56,7 +56,7 @@ private fun WidgetContent(data: JSONObject?) {
             .fillMaxSize()
             .background(black)
             .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Vertical.CenterVertically
     ) {
         if (data == null) {
             Text(
