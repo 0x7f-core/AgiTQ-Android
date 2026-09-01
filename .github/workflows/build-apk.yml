@@ -11,6 +11,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      AGITQ_KEYSTORE_BASE64: ${{ secrets.AGITQ_KEYSTORE_BASE64 }}
+      AGITQ_KEYSTORE_PASSWORD: ${{ secrets.AGITQ_KEYSTORE_PASSWORD }}
+      AGITQ_KEY_ALIAS: ${{ secrets.AGITQ_KEY_ALIAS }}
+      AGITQ_KEY_PASSWORD: ${{ secrets.AGITQ_KEY_PASSWORD }}
+      AGITQ_KEYSTORE_PATH: agitq-release.p12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +35,13 @@ jobs:
       - name: Verify Gradle environment
         working-directory: android
         run: gradle --version
+
+      - name: Prepare signing keystore
+        working-directory: android
+        run: |
+          printf '%s' "$AGITQ_KEYSTORE_BASE64" | base64 --decode > app/agitq-release.p12
+          test -s app/agitq-release.p12
+          chmod 600 app/agitq-release.p12
 
       - name: Build release APK
         working-directory: android
