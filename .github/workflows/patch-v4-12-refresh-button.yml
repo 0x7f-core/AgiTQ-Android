@@ -1,3 +1,4 @@
+# One-time source patch; remove after the bot commit is created.
 name: One-time v4.12 refresh button patch
 
 on:
