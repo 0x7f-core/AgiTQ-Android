@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
-        Rebuilt from the exact 200SPX widget button specification:
-        28dp circular button, 6dp effective edge margin, 5dp internal icon padding.
-        AgiTQ's Glance Image already supplies 2dp outer padding, so the drawable
-        uses 4dp edge inset here to reproduce the same 6dp visual margin.
+        Keep the exact 200SPX refresh-button style, but reduce only the visible
+        button diameter to match the smaller reference screenshot.
+        Glance still keeps a large touch target; this drawable only controls
+        the visible circle/glyph.
     -->
     <item
-        android:width="28dp"
-        android:height="28dp"
+        android:width="18dp"
+        android:height="18dp"
         android:gravity="end|bottom"
         android:right="4dp"
         android:bottom="4dp"
         android:drawable="@drawable/bg_refresh_circle" />
 
-    <!-- 28dp button - 5dp padding on both sides = 18dp visible refresh glyph. -->
+    <!-- 18dp button with 3dp internal padding => 12dp visible refresh glyph. -->
     <item
-        android:width="18dp"
-        android:height="18dp"
+        android:width="12dp"
+        android:height="12dp"
         android:gravity="end|bottom"
-        android:right="9dp"
-        android:bottom="9dp"
+        android:right="7dp"
+        android:bottom="7dp"
         android:drawable="@drawable/ic_refresh" />
 </layer-list>
