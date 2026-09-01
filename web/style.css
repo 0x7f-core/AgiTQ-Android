@@ -37,17 +37,17 @@ canvas{display:block;max-width:100%}
   margin:0 auto;
   display:flex;
   flex-direction:column;
-  gap:18px;
+  gap:14px;
 }
 
 .card{
   width:100%;
-  aspect-ratio:900/520;
-  min-height:360px;
+  aspect-ratio:900/505;
+  min-height:350px;
   background:var(--card);
   border:1px solid var(--border);
   border-radius:22px;
-  padding:18px 22px 17px;
+  padding:18px 22px 16px;
   overflow:hidden;
   display:flex;
   flex-direction:column;
@@ -72,7 +72,7 @@ canvas{display:block;max-width:100%}
 
 .version{
   color:var(--p2);
-  font-size:clamp(10px,1.35vw,17px);
+  font-size:clamp(11px,1.45vw,18px);
   line-height:1;
   font-weight:400;
   white-space:nowrap;
@@ -93,12 +93,12 @@ canvas{display:block;max-width:100%}
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:clamp(16px,2.2vw,26px);
-  padding-top:8px;
+  gap:clamp(12px,1.8vw,22px);
+  padding-top:6px;
 }
 
 .chart-box{
-  flex:1.06;
+  flex:1.12;
   min-width:0;
   display:flex;
   align-items:center;
@@ -107,12 +107,12 @@ canvas{display:block;max-width:100%}
 .chart-box canvas{width:100%;height:auto;aspect-ratio:5/3}
 
 .info-box{
-  flex:1.02;
+  flex:.98;
   min-width:0;
   display:flex;
   flex-direction:column;
   justify-content:center;
-  padding-left:4px;
+  padding-left:0;
 }
 
 .sig-row{
@@ -151,17 +151,18 @@ canvas{display:block;max-width:100%}
 }
 
 .fgi-card{padding-top:20px}
-.fgi-row{padding-top:10px}
-.fgi-chart-box{flex:1.08}
+.fgi-row{padding-top:8px}
+.fgi-chart-box{flex:1.12}
 .fgi-chart-box canvas{aspect-ratio:480/300}
 .fgi-info-box{
-  flex:1;
+  flex:.98;
   min-width:0;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   text-align:center;
+  transform:translateY(4px);
 }
 .fgi-info-box canvas{
   width:min(100%,360px);
@@ -197,17 +198,17 @@ canvas{display:block;max-width:100%}
 
 @media(max-width:680px){
   body{padding-left:8px;padding-right:8px}
-  .widget-container{gap:10px}
+  .widget-container{gap:8px}
   .card{
     min-height:0;
-    aspect-ratio:1.62;
+    aspect-ratio:1.70;
     border-radius:18px;
-    padding:12px 13px 11px;
+    padding:12px 13px 10px;
   }
   .title,.fgi-header{font-size:clamp(13px,4.0vw,18px)}
-  .version{font-size:clamp(8px,2.2vw,10px)}
+  .version{font-size:clamp(9px,2.35vw,11px)}
   .updated-time{font-size:clamp(9px,2.55vw,12px);margin-top:4px}
-  .content-row{gap:8px;padding-top:4px}
+  .content-row{gap:6px;padding-top:3px}
   .sig-row{font-size:clamp(12px,3.65vw,17px)}
   .status-text{font-size:clamp(9px,2.55vw,12px);margin-top:5px}
   .dd-text{font-size:clamp(10px,2.9vw,13px);margin-top:6px}
