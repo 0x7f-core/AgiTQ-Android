@@ -8,6 +8,8 @@ import androidx.work.WorkerParameters
 class AgiTQRefreshWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = runCatching {
         AgiTQApi.load()
-        AgiTQWidget().updateAll(applicationContext)
+        SpxWidget().updateAll(applicationContext)
+        QqqWidget().updateAll(applicationContext)
+        FgiWidget().updateAll(applicationContext)
     }.fold({ Result.success() }, { Result.retry() })
 }
