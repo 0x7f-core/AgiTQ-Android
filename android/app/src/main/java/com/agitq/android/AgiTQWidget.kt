@@ -227,15 +227,16 @@ private fun marketCardBitmap(
 
     val mode = layoutMode(width, height)
     val short = min(width, height).toFloat()
+    val iosWideScale = canvasUnitsPerDp * wideFontStretch(width, height)
     val pad = short * 0.055f
     val titleSize = withIosWideFontFloor(
-        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, canvasUnitsPerDp
+        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, iosWideScale
     )
     val versionSize = withIosWideFontFloor(
-        (short * 0.0365f).coerceIn(13f, 22f), 8f, mode, canvasUnitsPerDp
+        (short * 0.0365f).coerceIn(13f, 22f), 8f, mode, iosWideScale
     )
     val timeSize = withIosWideFontFloor(
-        (short * 0.0405f).coerceIn(15f, 25f), 10f, mode, canvasUnitsPerDp
+        (short * 0.0405f).coerceIn(15f, 25f), 10f, mode, iosWideScale
     )
     val titleY = pad + titleSize
 
@@ -269,7 +270,7 @@ private fun marketCardBitmap(
                 maxWidth = signalWidth,
                 short = short,
                 densityFactor = 1f,
-                minimumRowSize = (if (bandPct <= 0.02) 15f else 14f) * canvasUnitsPerDp,
+                minimumRowSize = (if (bandPct <= 0.02) 15f else 14f) * iosWideScale,
                 drawdownBold = bandPct <= 0.02
             )
         }
@@ -541,9 +542,10 @@ private fun fgiCardBitmap(
 
     val mode = layoutMode(width, height)
     val short = min(width, height).toFloat()
+    val iosWideScale = canvasUnitsPerDp * wideFontStretch(width, height)
     val pad = short * 0.055f
     val titleSize = withIosWideFontFloor(
-        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, canvasUnitsPerDp
+        (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, iosWideScale
     )
     val titleY = pad + titleSize
     drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", pad, titleY, titleSize, COLOR_WHITE, true)
@@ -573,7 +575,7 @@ private fun fgiCardBitmap(
 
             val ratingY = contentTop + (bottom - contentTop) * 0.72f
             val ratingSize = withIosWideFontFloor(
-                (short * 0.059f).coerceIn(22f, 35f), 15f, mode, canvasUnitsPerDp
+                (short * 0.059f).coerceIn(22f, 35f), 15f, mode, iosWideScale
             )
             drawFittedCenteredText(
                 canvas,
@@ -593,7 +595,7 @@ private fun fgiCardBitmap(
                 rightCenter,
                 contentTop + (bottom - contentTop) * 0.90f,
                 withIosWideFontFloor(
-                    (short * 0.050f).coerceIn(18f, 30f), 13f, mode, canvasUnitsPerDp
+                    (short * 0.050f).coerceIn(18f, 30f), 13f, mode, iosWideScale
                 ),
                 rightRight - rightLeft
             )
@@ -857,6 +859,15 @@ private fun withIosWideFontFloor(
     max(responsiveSize, iosPointSize * canvasUnitsPerDp)
 } else {
     responsiveSize
+}
+
+/**
+ * 높이는 유지한 채 옆으로 넓힌 가로형 위젯은 iOS 고정 pt 비율을 완만하게 확대한다.
+ * 1.6 비율까지는 v4.25 크기를 유지하고, 매우 넓어져도 최대 20%까지만 키운다.
+ */
+private fun wideFontStretch(width: Int, height: Int): Float {
+    val aspect = width.toFloat() / height.coerceAtLeast(1)
+    return sqrt(max(1f, aspect / 1.60f)).coerceAtMost(1.20f)
 }
 
 private fun drawFittedText(
