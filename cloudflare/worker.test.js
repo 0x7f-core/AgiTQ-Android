@@ -62,7 +62,7 @@ test('market response is cached and last-good data survives an upstream outage',
   await Promise.all(pending);
 
   assert.equal(first.status, 200);
-  assert.equal(firstData.version, 'v4.20');
+  assert.equal(firstData.version, 'v4.23');
   assert.equal(firstData.SPX.closes.length, 260);
   assert.equal(firstData.FGI.available, true);
   assert.equal(upstreamCalls, 4);
@@ -70,6 +70,21 @@ test('market response is cached and last-good data survives an upstream outage',
   const second = await worker.fetch(request, {}, { waitUntil() {} });
   assert.equal(second.headers.get('X-AgiTQ-Cache'), 'fresh');
   assert.equal(upstreamCalls, 4);
+
+  const forcedPending = [];
+  const forced = await worker.fetch(
+    new Request('https://example.test/api/market?refresh=1'),
+    {},
+    { waitUntil: promise => forcedPending.push(promise) },
+  );
+  await Promise.all(forcedPending);
+  assert.equal(forced.status, 200);
+  assert.equal(forced.headers.get('X-AgiTQ-Cache'), 'upstream-forced');
+  assert.equal(upstreamCalls, 8);
+
+  const afterForced = await worker.fetch(request, {}, { waitUntil() {} });
+  assert.equal(afterForced.headers.get('X-AgiTQ-Cache'), 'fresh');
+  assert.equal(upstreamCalls, 8);
 
   cache.entries.delete('https://example.test/__agitq_cache/market-fresh');
   globalThis.fetch = async () => { throw new Error('offline'); };

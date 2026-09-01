@@ -265,7 +265,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok:true, service:'AgiTQ API', version:'4.20' });
+      return json({ ok:true, service:'AgiTQ API', version:'4.23' });
     }
 
     if (url.pathname !== '/api/market') {
@@ -273,13 +273,16 @@ export default {
     }
 
     const cache = caches.default;
+    const forceRefresh = url.searchParams.get('refresh') === '1';
     const freshKey = cacheRequest(request.url, 'market-fresh');
     const staleKey = cacheRequest(request.url, 'market-last-good');
-    const cached = await cache.match(freshKey);
-    if (cached) {
-      const headers = new Headers(cached.headers);
-      headers.set('X-AgiTQ-Cache', 'fresh');
-      return new Response(cached.body, { status: cached.status, headers });
+    if (!forceRefresh) {
+      const cached = await cache.match(freshKey);
+      if (cached) {
+        const headers = new Headers(cached.headers);
+        headers.set('X-AgiTQ-Cache', 'fresh');
+        return new Response(cached.body, { status: cached.status, headers });
+      }
     }
 
     const staleResponse = await cache.match(staleKey);
@@ -325,7 +328,7 @@ export default {
         : null;
 
       const payload = {
-        version:'v4.20',
+        version:'v4.23',
         updated:new Date().toISOString(),
         SPX:{ price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal },
         QQQ:{ price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal },
@@ -340,7 +343,9 @@ export default {
         },
       };
 
-      const response = json(payload, 200, { 'X-AgiTQ-Cache': 'upstream' });
+      const response = json(payload, 200, {
+        'X-AgiTQ-Cache': forceRefresh ? 'upstream-forced' : 'upstream',
+      });
       const lastGood = json(payload, 200, {
         'Cache-Control': `public, max-age=${STALE_CACHE_TTL}`,
         'X-AgiTQ-Cache': 'last-good',

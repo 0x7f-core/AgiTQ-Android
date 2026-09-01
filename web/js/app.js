@@ -295,7 +295,7 @@ async function renderDashboard({ force = false } = {}) {
 
   const promise = (async () => {
     try {
-      const data = await getMarket({ signal: controller.signal });
+      const data = await getMarket({ signal: controller.signal, forceRefresh: force });
       if (sequence !== requestSequence) return;
       document.getElementById('spx-updated').textContent = formatMarketTime(data.SPX?.mTime);
       document.getElementById('qqq-updated').textContent = formatMarketTime(data.QQQ?.mTime);

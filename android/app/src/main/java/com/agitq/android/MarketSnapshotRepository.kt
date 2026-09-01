@@ -31,19 +31,20 @@ object MarketSnapshotRepository {
 
     suspend fun cachedOrRefresh(context: Context): JSONObject? = withContext(Dispatchers.IO) {
         readCached(context) ?: refreshMutex.withLock {
-            readCached(context) ?: fetchAndPersist(context).data
+            readCached(context) ?: fetchAndPersist(context, forceRefresh = false).data
         }
     }
 
     suspend fun refresh(context: Context): RefreshResult = withContext(Dispatchers.IO) {
-        refreshMutex.withLock { fetchAndPersist(context) }
+        // 수동 새로고침과 정규장 30분 갱신은 Worker의 5분 캐시를 우회한다.
+        refreshMutex.withLock { fetchAndPersist(context, forceRefresh = true) }
     }
 
     fun cached(context: Context): JSONObject? = readCached(context)
 
-    private fun fetchAndPersist(context: Context): RefreshResult {
+    private fun fetchAndPersist(context: Context, forceRefresh: Boolean): RefreshResult {
         return try {
-            val fresh = AgiTQApi.load()
+            val fresh = AgiTQApi.load(forceRefresh)
             requireValidSnapshot(fresh)
             val fetchedAt = System.currentTimeMillis()
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

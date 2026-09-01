@@ -1,7 +1,7 @@
 const API_BASE = 'https://agitq-api.0x7f-core.workers.dev';
 const API_TIMEOUT_MS = 20000;
 
-async function getMarket({ signal, timeoutMs = API_TIMEOUT_MS } = {}){
+async function getMarket({ signal, timeoutMs = API_TIMEOUT_MS, forceRefresh = false } = {}){
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (signal?.aborted) abort();
@@ -9,7 +9,8 @@ async function getMarket({ signal, timeoutMs = API_TIMEOUT_MS } = {}){
   const timeout = setTimeout(abort, timeoutMs);
 
   try {
-    const r = await fetch(`${API_BASE}/api/market`, {
+    const endpoint = `${API_BASE}/api/market${forceRefresh ? '?refresh=1' : ''}`;
+    const r = await fetch(endpoint, {
       cache: 'no-store',
       signal: controller.signal,
     });
