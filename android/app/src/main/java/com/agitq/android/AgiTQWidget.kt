@@ -241,9 +241,10 @@ private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
     val rating = fgiRatingKo(fgi.optString("rating"))
     val scoreColor = fgiAndroidColor(value)
 
-    drawText(canvas, "공포·탐욕 지수", CARD_W / 2f, 50f, 30f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, value.toInt().toString(), 390f, 132f, 76f, scoreColor, true, Paint.Align.RIGHT)
-    drawText(canvas, rating, 420f, 122f, 31f, scoreColor, true)
+    // Keep the score row well above the gauge so the gauge's center label can never overlap it.
+    drawText(canvas, "공포·탐욕 지수", CARD_W / 2f, 44f, 30f, COLOR_WHITE, true, Paint.Align.CENTER)
+    drawText(canvas, value.toInt().toString(), 425f, 112f, 72f, scoreColor, true, Paint.Align.RIGHT)
+    drawText(canvas, rating, 465f, 104f, 30f, scoreColor, true)
 
     drawFgiGauge(canvas, value)
 
@@ -252,16 +253,17 @@ private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
     } else {
         "30일 평균 -"
     }
-    drawText(canvas, avgText, CARD_W / 2f, 420f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
+    drawText(canvas, avgText, CARD_W / 2f, 370f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
 
-    drawFgiHistory(canvas, fgi, RectF(110f, 447f, 790f, 502f))
+    drawText(canvas, "최근 90일", 84f, 410f, 18f, COLOR_GRAY)
+    drawFgiHistory(canvas, fgi, RectF(84f, 422f, 816f, 500f))
     return bitmap
 }
 
 private fun drawFgiGauge(canvas: Canvas, value: Double) {
     val cx = CARD_W / 2f
-    val cy = 350f
-    val radius = 225f
+    val cy = 325f
+    val radius = 180f
     val rect = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
     val colors = intArrayOf(
         AndroidColor.rgb(232, 113, 79),
@@ -272,7 +274,7 @@ private fun drawFgiGauge(canvas: Canvas, value: Double) {
     )
     val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 38f
+        strokeWidth = 32f
         strokeCap = Paint.Cap.BUTT
     }
     for (i in 0..4) {
@@ -282,20 +284,21 @@ private fun drawFgiGauge(canvas: Canvas, value: Double) {
 
     val clamped = value.coerceIn(0.0, 100.0)
     val angle = Math.toRadians(180.0 + clamped * 1.8)
-    val needleRadius = radius - 36f
+    val needleRadius = radius - 31f
     val nx = cx + (cos(angle) * needleRadius).toFloat()
     val ny = cy + (sin(angle) * needleRadius).toFloat()
     val needle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = COLOR_WHITE
-        strokeWidth = 8f
+        strokeWidth = 7f
         strokeCap = Paint.Cap.ROUND
     }
     canvas.drawLine(cx, cy, nx, ny, needle)
-    canvas.drawCircle(cx, cy, 12f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
+    canvas.drawCircle(cx, cy, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
 
-    drawText(canvas, "극공포", 94f, 374f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
-    drawText(canvas, "중립", cx, 126f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
-    drawText(canvas, "극탐욕", CARD_W - 94f, 374f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
+    // Gauge labels are deliberately separated from the score/rating row.
+    drawText(canvas, "극공포", 232f, 342f, 21f, COLOR_GRAY, false, Paint.Align.CENTER)
+    drawText(canvas, "중립", cx, 168f, 20f, COLOR_GRAY, false, Paint.Align.CENTER)
+    drawText(canvas, "극탐욕", CARD_W - 232f, 342f, 21f, COLOR_GRAY, false, Paint.Align.CENTER)
 }
 
 private fun drawFgiHistory(canvas: Canvas, fgi: JSONObject, area: RectF) {
@@ -313,8 +316,10 @@ private fun drawFgiHistory(canvas: Canvas, fgi: JSONObject, area: RectF) {
         color = COLOR_DARK_GRAY
         strokeWidth = 1.4f
     }
-    val midY = area.top + area.height() / 2f
-    canvas.drawLine(area.left, midY, area.right, midY, grid)
+    for (level in listOf(25.0, 50.0, 75.0)) {
+        val y = area.top + ((100.0 - level) / 100.0 * area.height()).toFloat()
+        canvas.drawLine(area.left, y, area.right, y, grid)
+    }
 
     val path = Path()
     values.forEachIndexed { i, v ->
@@ -325,10 +330,15 @@ private fun drawFgiHistory(canvas: Canvas, fgi: JSONObject, area: RectF) {
     canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = COLOR_WHITE
         style = Paint.Style.STROKE
-        strokeWidth = 3.2f
+        strokeWidth = 3.6f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     })
+
+    val last = values.last()
+    val lastX = area.right
+    val lastY = area.top + ((100.0 - last) / 100.0 * area.height()).toFloat()
+    canvas.drawCircle(lastX, lastY, 5.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
 }
 
 private fun errorCardBitmap(): Bitmap {
