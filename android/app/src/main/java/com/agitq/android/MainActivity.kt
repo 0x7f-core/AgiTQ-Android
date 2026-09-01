@@ -13,16 +13,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AndroidView(modifier=Modifier.fillMaxSize(), factory={
-                WebView(it).apply {
-                    settings.javaScriptEnabled=true
-                    settings.domStorageEnabled=true
-                    settings.loadWithOverviewMode=true
-                    settings.useWideViewPort=true
-                    webViewClient=WebViewClient()
-                    loadUrl("https://YOUR-USERNAME.github.io/AgiTQ-Android/")
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.loadWithOverviewMode = true
+                        settings.useWideViewPort = true
+                        webViewClient = WebViewClient()
+                        loadUrl("https://0x7f-core.github.io/AgiTQ-Android/")
+                    }
                 }
-            })
+            )
         }
     }
 }
