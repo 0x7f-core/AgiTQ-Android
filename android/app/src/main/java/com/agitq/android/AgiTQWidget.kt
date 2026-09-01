@@ -25,6 +25,10 @@ import androidx.glance.layout.fillMaxSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -32,23 +36,28 @@ import kotlin.math.sin
 
 private const val CARD_W = 900
 private const val CARD_H = 520
+private const val SCRIPTABLE_VERSION = "v3.0-γ (26.08.12)"
 
 private val COLOR_BG = AndroidColor.BLACK
 private val COLOR_WHITE = AndroidColor.WHITE
-private val COLOR_GRAY = AndroidColor.rgb(165, 165, 165)
-private val COLOR_DARK_GRAY = AndroidColor.rgb(55, 55, 55)
-private val COLOR_CYAN = AndroidColor.rgb(128, 223, 255)
-private val COLOR_GREEN = AndroidColor.rgb(175, 212, 133)
-private val COLOR_PINK = AndroidColor.rgb(224, 112, 192)
-private val COLOR_RED = AndroidColor.rgb(255, 95, 95)
+private val COLOR_P2 = AndroidColor.rgb(170, 170, 170)
+private val COLOR_DOT = AndroidColor.rgb(102, 102, 102)
+private val COLOR_DIVIDER = AndroidColor.rgb(51, 51, 51)
+private val COLOR_TQQQ = AndroidColor.rgb(232, 113, 79)
+private val COLOR_SPYM = AndroidColor.rgb(176, 124, 192)
+private val COLOR_SGOV = AndroidColor.rgb(91, 184, 232)
+private val COLOR_CP = AndroidColor.rgb(128, 223, 255)
+private val COLOR_UPPER = AndroidColor.rgb(224, 112, 192)
+private val COLOR_LOWER = AndroidColor.rgb(175, 212, 133)
+private val COLOR_ALERT = AndroidColor.rgb(255, 77, 77)
 
 class SpxWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
         val card = data?.optJSONObject("SPX")?.let {
-            marketCardBitmap(it, "SPX", "아기티큐 200슨피단", 0.025)
+            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025)
         } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "SPX 투자 전략 위젯") }
+        provideContent { FullCard(context, card, "아기티큐 200슨피단 SPX") }
     }
 }
 
@@ -60,9 +69,9 @@ class QqqWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
         val card = data?.optJSONObject("QQQ")?.let {
-            marketCardBitmap(it, "QQQ", "아기티큐 200큐큐단", 0.02)
+            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02)
         } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "QQQ 투자 전략 위젯") }
+        provideContent { FullCard(context, card, "아기티큐 200큐큐단 QQQ") }
     }
 }
 
@@ -74,7 +83,7 @@ class FgiWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadData()
         val card = data?.optJSONObject("FGI")?.let { fgiCardBitmap(it) } ?: errorCardBitmap()
-        provideContent { FullCard(context, card, "공포 탐욕 지수 위젯") }
+        provideContent { FullCard(context, card, "공포와 탐욕 지수 CNN FGI") }
     }
 }
 
@@ -104,48 +113,30 @@ private fun dashboardIntent(context: Context): Intent = Intent(context, MainActi
     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 }
 
-private fun marketCardBitmap(asset: JSONObject, symbol: String, title: String, bandPct: Double): Bitmap {
+/**
+ * SPX/QQQ 독립 카드.
+ * 원본 iOS Scriptable Medium/Large 상단의 정보 구조를 그대로 사용한다:
+ * 제목 + 버전 / 미국 동부 기준 시각 / 왼쪽 90일 밴드 차트 / 오른쪽 전략 신호.
+ */
+private fun marketCardBitmap(asset: JSONObject, title: String, bandPct: Double): Bitmap {
     val bitmap = Bitmap.createBitmap(CARD_W, CARD_H, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
 
     val sig = asset.optJSONObject("signal")
-    val price = asset.optDouble("price", 0.0)
-    val sma = sig?.optDouble("sma", 0.0) ?: 0.0
 
-    drawText(canvas, title, CARD_W / 2f, 48f, 28f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, symbol, 64f, 112f, 28f, COLOR_CYAN, true)
-    drawText(canvas, formatPrice(price), 150f, 119f, 56f, COLOR_WHITE, true)
+    drawText(canvas, title, 30f, 48f, 32f, COLOR_WHITE, true)
+    drawText(canvas, SCRIPTABLE_VERSION, CARD_W - 30f, 46f, 17f, COLOR_P2, false, Paint.Align.RIGHT)
+    drawText(canvas, formatMarketTime(asset.optLong("mTime", 0L)), 30f, 86f, 21f, COLOR_WHITE)
 
-    val distance = formatDistance(price, sma)
-    drawText(canvas, "200SMA ${formatPrice(sma)}", 64f, 158f, 23f, COLOR_GRAY)
-    drawText(
-        canvas,
-        distance,
-        360f,
-        158f,
-        23f,
-        if (price >= sma) COLOR_GREEN else COLOR_RED,
-        true
-    )
-
-    drawMarketChart(canvas, asset, bandPct, RectF(64f, 182f, 836f, 354f))
-
-    val signalName = sig?.optString("name", "-") ?: "-"
-    val signalColor = when {
-        sig?.optBoolean("alert") == true -> COLOR_RED
-        sig?.optString("position") == "ABOVE" -> COLOR_GREEN
-        sig?.optString("position") == "BELOW" -> COLOR_RED
-        else -> COLOR_GRAY
-    }
-    drawText(canvas, signalName, CARD_W / 2f, 402f, 26f, signalColor, true, Paint.Align.CENTER)
-    drawText(canvas, signalSummary(sig), CARD_W / 2f, 445f, 25f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, drawdownText(sig), CARD_W / 2f, 486f, 21f, COLOR_GRAY, false, Paint.Align.CENTER)
+    drawMarketChartScriptable(canvas, asset, bandPct, RectF(30f, 124f, 462f, 388f))
+    drawSignalBlock(canvas, sig, 500f, 150f)
 
     return bitmap
 }
 
-private fun drawMarketChart(canvas: Canvas, asset: JSONObject, bandPct: Double, area: RectF) {
+/** 원본 Scriptable drawBandChart(500x300)의 비율/색/선 굵기를 카드 크기에 맞게 재현. */
+private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct: Double, area: RectF) {
     val arr = asset.optJSONArray("closes") ?: return
     val closes = ArrayList<Double>(arr.length())
     for (i in 0 until arr.length()) {
@@ -155,11 +146,11 @@ private fun drawMarketChart(canvas: Canvas, asset: JSONObject, bandPct: Double, 
     if (closes.size < 200) return
 
     val sma = arrayOfNulls<Double>(closes.size)
-    var sum = 0.0
+    var rolling = 0.0
     for (i in closes.indices) {
-        sum += closes[i]
-        if (i >= 200) sum -= closes[i - 200]
-        if (i >= 199) sma[i] = sum / 200.0
+        rolling += closes[i]
+        if (i >= 200) rolling -= closes[i - 200]
+        if (i >= 199) sma[i] = rolling / 200.0
     }
 
     val start = max(0, closes.size - 90)
@@ -167,33 +158,25 @@ private fun drawMarketChart(canvas: Canvas, asset: JSONObject, bandPct: Double, 
     val upper = (start until closes.size).map { sma[it]?.times(1.0 + bandPct) }
     val lower = (start until closes.size).map { sma[it]?.times(1.0 - bandPct) }
 
-    val values = mutableListOf<Double>()
-    values += prices
-    upper.filterNotNullTo(values)
-    lower.filterNotNullTo(values)
-    if (values.isEmpty()) return
+    val all = mutableListOf<Double>()
+    all += prices
+    upper.filterNotNullTo(all)
+    lower.filterNotNullTo(all)
+    if (all.isEmpty()) return
 
-    var minV = values.minOrNull() ?: return
-    var maxV = values.maxOrNull() ?: return
+    var minV = all.minOrNull() ?: return
+    var maxV = all.maxOrNull() ?: return
     if (maxV <= minV) maxV = minV + 1.0
-    val rangePad = (maxV - minV) * 0.06
-    minV -= rangePad
-    maxV += rangePad
 
-    val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = COLOR_DARK_GRAY
-        strokeWidth = 1.4f
-    }
-    for (k in 0..3) {
-        val y = area.top + area.height() * k / 3f
-        canvas.drawLine(area.left, y, area.right, y, grid)
-    }
+    val padX = area.width() * 0.03f
+    val padY = area.height() * 0.05f
+    val plot = RectF(area.left + padX, area.top + padY, area.right - padX, area.bottom - padY)
 
-    fun x(i: Int): Float = area.left + if (prices.size <= 1) 0f else i.toFloat() / (prices.size - 1) * area.width()
-    fun y(v: Double): Float = area.top + ((maxV - v) / (maxV - minV) * area.height()).toFloat()
+    fun x(i: Int): Float = plot.left + if (prices.size <= 1) 0f else i.toFloat() / (prices.size - 1) * plot.width()
+    fun y(v: Double): Float = plot.bottom - ((v - minV) / (maxV - minV) * plot.height()).toFloat()
 
     fun series(data: List<Double?>, color: Int, width: Float) {
-        val p = Path()
+        val path = Path()
         var started = false
         data.forEachIndexed { i, v ->
             if (v == null || !v.isFinite()) {
@@ -202,14 +185,14 @@ private fun drawMarketChart(canvas: Canvas, asset: JSONObject, bandPct: Double, 
                 val px = x(i)
                 val py = y(v)
                 if (!started) {
-                    p.moveTo(px, py)
+                    path.moveTo(px, py)
                     started = true
                 } else {
-                    p.lineTo(px, py)
+                    path.lineTo(px, py)
                 }
             }
         }
-        canvas.drawPath(p, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.STROKE
             strokeWidth = width
@@ -218,18 +201,77 @@ private fun drawMarketChart(canvas: Canvas, asset: JSONObject, bandPct: Double, 
         })
     }
 
-    series(lower, COLOR_GREEN, 3.2f)
-    series(upper, COLOR_PINK, 3.2f)
-    series(prices.map { it }, COLOR_CYAN, 4.8f)
-
-    val lastX = x(prices.lastIndex)
-    val lastY = y(prices.last())
-    canvas.drawCircle(lastX, lastY, 7f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
-
-    drawText(canvas, "90일", area.left, area.bottom + 23f, 18f, COLOR_GRAY)
-    drawText(canvas, "현재", area.right, area.bottom + 23f, 18f, COLOR_GRAY, false, Paint.Align.RIGHT)
+    series(upper, COLOR_UPPER, 3.8f)
+    series(lower, COLOR_LOWER, 3.8f)
+    series(prices.map { it }, COLOR_CP, 6.0f)
 }
 
+private fun drawSignalBlock(canvas: Canvas, sig: JSONObject?, x: Float, top: Float) {
+    if (sig == null) return
+    val isAlert = sig.optBoolean("alert", false)
+    val lines = sig.optJSONArray("lines")
+    var y = top + 52f
+
+    if (lines != null) {
+        for (i in 0 until min(lines.length(), 2)) {
+            val row = lines.optJSONArray(i) ?: continue
+            drawSignalRow(canvas, row.optString(0), row.optString(1), x, y, 35f, isAlert)
+            y += 58f
+        }
+    }
+
+    y += 12f
+    drawText(
+        canvas,
+        sig.optString("name", "-"),
+        x,
+        y,
+        23f,
+        if (isAlert) COLOR_ALERT else COLOR_P2
+    )
+
+    y += 52f
+    drawText(canvas, drawdownText(sig), x, y, 27f, COLOR_WHITE, true)
+}
+
+private fun drawSignalRow(
+    canvas: Canvas,
+    token: String,
+    action: String,
+    startX: Float,
+    baseline: Float,
+    size: Float,
+    isAlert: Boolean
+) {
+    var x = startX
+    val boldPaint = textPaint(size, COLOR_WHITE, true)
+
+    if (isAlert) {
+        val line = "$token $action"
+        drawText(canvas, line, x, baseline, size, COLOR_ALERT, true)
+        return
+    }
+
+    val parts = token.split("·")
+    parts.forEachIndexed { index, part ->
+        val color = etfAndroidColor(part)
+        drawText(canvas, part, x, baseline, size, color, true)
+        x += textPaint(size, color, true).measureText(part)
+        if (index < parts.lastIndex) {
+            drawText(canvas, "·", x, baseline, size, COLOR_DOT, true)
+            x += textPaint(size, COLOR_DOT, true).measureText("·")
+        }
+    }
+
+    x += boldPaint.measureText(" ") * 1.4f
+    drawText(canvas, action, x, baseline, size, COLOR_WHITE, true)
+}
+
+/**
+ * FGI 독립 카드.
+ * 원본 Scriptable Large 하단 FGI 블록을 그대로 독립 카드로 확장한다:
+ * 왼쪽 90일 히스토리 + 오른쪽 게이지/등급/현재값/30일 평균.
+ */
 private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
     val bitmap = Bitmap.createBitmap(CARD_W, CARD_H, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
@@ -238,72 +280,33 @@ private fun fgiCardBitmap(fgi: JSONObject): Bitmap {
     val value = fgi.optDouble("value", Double.NaN)
     if (!value.isFinite()) return errorCardBitmap()
     val avg30 = fgi.optDouble("avg30", Double.NaN)
-    val rating = fgiRatingKo(fgi.optString("rating"))
-    val scoreColor = fgiAndroidColor(value)
+    val rating = fgiRatingFull(fgi.optString("rating"))
 
-    // Keep the score row well above the gauge so the gauge's center label can never overlap it.
-    drawText(canvas, "공포·탐욕 지수", CARD_W / 2f, 44f, 30f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, value.toInt().toString(), 425f, 112f, 72f, scoreColor, true, Paint.Align.RIGHT)
-    drawText(canvas, rating, 465f, 104f, 30f, scoreColor, true)
+    drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", 30f, 50f, 32f, COLOR_WHITE, true)
 
-    drawFgiGauge(canvas, value)
+    drawFgiHistoryScriptable(canvas, fgi, RectF(30f, 118f, 468f, 440f))
+    drawFgiGaugeScriptable(canvas, value, RectF(520f, 105f, 870f, 302f))
 
-    val avgText = if (avg30.isFinite()) {
-        "30일 평균 ${avg30.toInt()}   ·   ${formatFgiDelta(value, avg30)}"
-    } else {
-        "30일 평균 -"
-    }
-    drawText(canvas, avgText, CARD_W / 2f, 370f, 23f, COLOR_GRAY, false, Paint.Align.CENTER)
+    drawText(
+        canvas,
+        rating,
+        695f,
+        356f,
+        31f,
+        fgiAndroidColor(value),
+        true,
+        Paint.Align.CENTER
+    )
 
-    drawText(canvas, "최근 90일", 84f, 410f, 18f, COLOR_GRAY)
-    drawFgiHistory(canvas, fgi, RectF(84f, 422f, 816f, 500f))
+    drawFgiStats(canvas, value, avg30, 695f, 414f, 26f)
     return bitmap
 }
 
-private fun drawFgiGauge(canvas: Canvas, value: Double) {
-    val cx = CARD_W / 2f
-    val cy = 325f
-    val radius = 180f
-    val rect = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
-    val colors = intArrayOf(
-        AndroidColor.rgb(232, 113, 79),
-        AndroidColor.rgb(240, 160, 160),
-        AndroidColor.rgb(170, 170, 170),
-        AndroidColor.rgb(91, 184, 232),
-        AndroidColor.rgb(176, 124, 192)
-    )
-    val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 32f
-        strokeCap = Paint.Cap.BUTT
-    }
-    for (i in 0..4) {
-        arcPaint.color = colors[i]
-        canvas.drawArc(rect, 180f + i * 36f, 36f, false, arcPaint)
-    }
-
-    val clamped = value.coerceIn(0.0, 100.0)
-    val angle = Math.toRadians(180.0 + clamped * 1.8)
-    val needleRadius = radius - 31f
-    val nx = cx + (cos(angle) * needleRadius).toFloat()
-    val ny = cy + (sin(angle) * needleRadius).toFloat()
-    val needle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = COLOR_WHITE
-        strokeWidth = 7f
-        strokeCap = Paint.Cap.ROUND
-    }
-    canvas.drawLine(cx, cy, nx, ny, needle)
-    canvas.drawCircle(cx, cy, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
-
-    // Gauge labels are deliberately separated from the score/rating row.
-    drawText(canvas, "극공포", 232f, 342f, 21f, COLOR_GRAY, false, Paint.Align.CENTER)
-    drawText(canvas, "중립", cx, 168f, 20f, COLOR_GRAY, false, Paint.Align.CENTER)
-    drawText(canvas, "극탐욕", CARD_W - 232f, 342f, 21f, COLOR_GRAY, false, Paint.Align.CENTER)
-}
-
-private fun drawFgiHistory(canvas: Canvas, fgi: JSONObject, area: RectF) {
+/** 원본 Scriptable drawFGIChart(480x300): 25/50/75 기준선 + 반투명 흰 선 + 값별 컬러 점. */
+private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: RectF) {
     val arr = fgi.optJSONArray("history") ?: return
     if (arr.length() < 2) return
+
     val values = mutableListOf<Double>()
     val start = max(0, arr.length() - 90)
     for (i in start until arr.length()) {
@@ -312,33 +315,124 @@ private fun drawFgiHistory(canvas: Canvas, fgi: JSONObject, area: RectF) {
     }
     if (values.size < 2) return
 
-    val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = COLOR_DARK_GRAY
-        strokeWidth = 1.4f
+    val padL = area.width() * (8f / 480f)
+    val padR = area.width() * (8f / 480f)
+    val padT = area.height() * (12f / 300f)
+    val padB = area.height() * (12f / 300f)
+    val plot = RectF(area.left + padL, area.top + padT, area.right - padR, area.bottom - padB)
+
+    fun toX(i: Int): Float = plot.left + i.toFloat() / (values.size - 1) * plot.width()
+    fun toY(v: Double): Float = plot.top + ((100.0 - v) / 100.0 * plot.height()).toFloat()
+
+    val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.argb(51, 170, 170, 170)
+        strokeWidth = 1.5f
     }
-    for (level in listOf(25.0, 50.0, 75.0)) {
-        val y = area.top + ((100.0 - level) / 100.0 * area.height()).toFloat()
-        canvas.drawLine(area.left, y, area.right, y, grid)
+    listOf(25.0, 50.0, 75.0).forEach { level ->
+        val y = toY(level)
+        canvas.drawLine(plot.left, y, plot.right, y, gridPaint)
     }
 
     val path = Path()
     values.forEachIndexed { i, v ->
-        val x = area.left + i.toFloat() / (values.size - 1) * area.width()
-        val y = area.top + ((100.0 - v) / 100.0 * area.height()).toFloat()
+        val x = toX(i)
+        val y = toY(v)
         if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
     }
     canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = COLOR_WHITE
+        color = AndroidColor.argb(102, 255, 255, 255)
         style = Paint.Style.STROKE
-        strokeWidth = 3.6f
+        strokeWidth = 2.8f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     })
 
-    val last = values.last()
-    val lastX = area.right
-    val lastY = area.top + ((100.0 - last) / 100.0 * area.height()).toFloat()
-    canvas.drawCircle(lastX, lastY, 5.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE })
+    values.forEachIndexed { i, v ->
+        canvas.drawCircle(
+            toX(i),
+            toY(v),
+            4.6f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(v) }
+        )
+    }
+}
+
+/** 원본 Scriptable drawGauge(320x180)를 좌표 스케일링해서 동일하게 재현. */
+private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
+    val baseW = 320f
+    val baseH = 180f
+    val scale = min(area.width() / baseW, area.height() / baseH)
+    val ox = area.centerX() - baseW * scale / 2f
+    val oy = area.centerY() - baseH * scale / 2f
+
+    fun sx(v: Float): Float = ox + v * scale
+    fun sy(v: Float): Float = oy + v * scale
+
+    val cx = 160f
+    val cy = 160f
+    val radius = 120f
+    val arcThick = 10f
+
+    for (i in 0 until 120) {
+        val t = i / 119.0
+        val angle = Math.PI + t * Math.PI
+        val x = cx + cos(angle).toFloat() * radius
+        val y = cy + sin(angle).toFloat() * radius
+        canvas.drawCircle(
+            sx(x),
+            sy(y),
+            arcThick * scale / 2f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(t * 100.0) }
+        )
+    }
+
+    val clamped = value.coerceIn(0.0, 100.0)
+    val needleAngle = Math.PI + (clamped / 100.0) * Math.PI
+    val needleLen = radius - 8f
+    val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_WHITE }
+
+    for (i in 0 until 35) {
+        val t = i / 34f
+        val nx = cx + cos(needleAngle).toFloat() * needleLen * t
+        val ny = cy + sin(needleAngle).toFloat() * needleLen * t
+        val thick = 12f * (1f - t)
+        canvas.drawCircle(sx(nx), sy(ny), max(0.7f, thick * scale / 2f), white)
+    }
+
+    canvas.drawCircle(sx(cx), sy(cy), 8f * scale, white)
+
+    val labelDist = radius + 22f
+    val lx = cx + cos(needleAngle).toFloat() * labelDist
+    val ly = cy + sin(needleAngle).toFloat() * labelDist
+    drawText(
+        canvas,
+        clamped.toInt().toString(),
+        sx(lx),
+        sy(ly) + 8f * scale,
+        23f * scale,
+        COLOR_WHITE,
+        true,
+        Paint.Align.CENTER
+    )
+}
+
+private fun drawFgiStats(canvas: Canvas, value: Double, avg30: Double, centerX: Float, baseline: Float, size: Float) {
+    val now = "현재 ${value.toInt()}"
+    val slash = " / "
+    val avg = if (avg30.isFinite()) "30일 평균 ${avg30.toInt()}" else "30일 평균 -"
+
+    val nowPaint = textPaint(size, fgiAndroidColor(value), true)
+    val slashPaint = textPaint(size + 2f, COLOR_WHITE, true)
+    val avgPaint = textPaint(size, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2, true)
+
+    val total = nowPaint.measureText(now) + slashPaint.measureText(slash) + avgPaint.measureText(avg)
+    var x = centerX - total / 2f
+
+    canvas.drawText(now, x, baseline, nowPaint)
+    x += nowPaint.measureText(now)
+    canvas.drawText(slash, x, baseline, slashPaint)
+    x += slashPaint.measureText(slash)
+    canvas.drawText(avg, x, baseline, avgPaint)
 }
 
 private fun errorCardBitmap(): Bitmap {
@@ -346,7 +440,7 @@ private fun errorCardBitmap(): Bitmap {
     val canvas = Canvas(bitmap)
     canvas.drawColor(COLOR_BG)
     drawText(canvas, "AgiTQ", CARD_W / 2f, 235f, 44f, COLOR_WHITE, true, Paint.Align.CENTER)
-    drawText(canvas, "데이터 로드 실패", CARD_W / 2f, 290f, 28f, COLOR_RED, true, Paint.Align.CENTER)
+    drawText(canvas, "데이터 로드 실패", CARD_W / 2f, 290f, 28f, COLOR_ALERT, true, Paint.Align.CENTER)
     return bitmap
 }
 
@@ -360,57 +454,62 @@ private fun drawText(
     bold: Boolean = false,
     align: Paint.Align = Paint.Align.LEFT
 ) {
-    canvas.drawText(text, x, y, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = color
-        textSize = size
-        textAlign = align
-        typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
-    })
+    canvas.drawText(text, x, y, textPaint(size, color, bold, align))
 }
 
-private fun signalSummary(sig: JSONObject?): String {
-    if (sig == null) return "-"
-    val lines = sig.optJSONArray("lines") ?: return "-"
-    val parts = mutableListOf<String>()
-    for (i in 0 until min(lines.length(), 2)) {
-        val row = lines.optJSONArray(i) ?: continue
-        parts += "${row.optString(0)} ${row.optString(1)}"
-    }
-    return parts.joinToString("  ·  ").ifBlank { "-" }
+private fun textPaint(
+    size: Float,
+    color: Int,
+    bold: Boolean,
+    align: Paint.Align = Paint.Align.LEFT
+): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    this.color = color
+    textSize = size
+    textAlign = align
+    typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
 }
 
 private fun drawdownText(sig: JSONObject?): String {
-    if (sig == null) return "TQQQ 최고점 대비 -"
+    if (sig == null) return "TQQQ 최고점 대비 N/A"
+    val position = sig.optString("position", "BELOW")
     val dd = sig.optDouble("drawdown", Double.NaN)
-    return if (dd.isFinite()) "TQQQ 최고점 대비 ${formatPercent(dd)}" else "TQQQ 최고점 대비 N/A"
+    return if (position == "ABOVE" && dd.isFinite()) {
+        "TQQQ 최고점 대비 ${String.format(Locale.US, "%.1f%%", dd)}"
+    } else {
+        "TQQQ 최고점 대비 N/A"
+    }
 }
 
-private fun formatPrice(value: Double): String =
-    if (value >= 1000.0) String.format("%,.0f", value) else String.format("%.2f", value)
-
-private fun formatPercent(value: Double): String = String.format("%.1f%%", value)
-
-private fun formatDistance(price: Double, sma: Double): String {
-    if (price <= 0.0 || sma <= 0.0) return "-"
-    return String.format("%+.1f%%", (price / sma - 1.0) * 100.0)
+private fun formatMarketTime(epochSeconds: Long): String {
+    if (epochSeconds <= 0L) return "-"
+    return runCatching {
+        DateTimeFormatter
+            .ofPattern("yy.MM.dd. HH:mm '기준'", Locale.KOREA)
+            .withZone(ZoneId.of("America/New_York"))
+            .format(Instant.ofEpochSecond(epochSeconds))
+    }.getOrDefault("-")
 }
 
-private fun formatFgiDelta(value: Double, avg: Double): String =
-    String.format("평균대비 %+.0f", value - avg)
+private fun etfAndroidColor(token: String): Int = when {
+    token.contains("TQQQ") -> COLOR_TQQQ
+    token.contains("SPYM") -> COLOR_SPYM
+    token.contains("SGOV") -> COLOR_SGOV
+    else -> COLOR_WHITE
+}
 
-private fun fgiRatingKo(rating: String): String = when (rating.lowercase()) {
-    "extreme fear" -> "극공포"
-    "fear" -> "공포"
-    "neutral" -> "중립"
-    "greed" -> "탐욕"
-    "extreme greed" -> "극탐욕"
+private fun fgiRatingFull(rating: String): String = when (rating.lowercase()) {
+    "extreme fear" -> "극공포 (Extreme Fear)"
+    "fear" -> "공포 (Fear)"
+    "neutral" -> "중립 (Neutral)"
+    "greed" -> "탐욕 (Greed)"
+    "extreme greed" -> "극탐욕 (Extreme Greed)"
     else -> rating.ifBlank { "-" }
 }
 
 private fun fgiAndroidColor(value: Double): Int = when {
-    value >= 75 -> COLOR_PINK
-    value >= 55 -> COLOR_CYAN
-    value >= 45 -> COLOR_GRAY
+    value >= 75 -> AndroidColor.rgb(176, 124, 192)
+    value >= 55 -> AndroidColor.rgb(91, 184, 232)
+    value >= 45 -> AndroidColor.rgb(170, 170, 170)
     value >= 25 -> AndroidColor.rgb(240, 160, 160)
     else -> AndroidColor.rgb(232, 113, 79)
 }
