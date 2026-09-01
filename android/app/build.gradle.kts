@@ -12,8 +12,8 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "4.27"
+        versionCode = 29
+        versionName = "4.28"
     }
 
     signingConfigs {

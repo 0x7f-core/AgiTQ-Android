@@ -416,14 +416,14 @@ private fun drawSignalBlockResponsive(
         (short * 0.067f * densityFactor).coerceIn(20f, 38f),
         minimumRowSize
     )
-    val rowGap = rowSize * 1.62f
     val rowCount = if (lines == null) 0 else {
         (0 until min(lines.length(), 2)).count { lines.optJSONArray(it) != null }
     }
-    val blockTop = verticalCenter?.let { center ->
-        center - signalBlockCenterOffset(rowSize, rowGap, rowCount, drawdownBold)
-    } ?: top
-    var y = blockTop + rowSize
+    val layout = signalBlockLayout(rowSize, rowCount, drawdownBold)
+    val firstBaseline = verticalCenter?.let { center ->
+        center - layout.centerOffset
+    } ?: (top + rowSize)
+    var y = firstBaseline
 
     if (lines != null) {
         for (i in 0 until min(lines.length(), 2)) {
@@ -438,11 +438,11 @@ private fun drawSignalBlockResponsive(
                 isAlert,
                 maxWidth
             )
-            y += rowGap
+            y += layout.rowBaselineGap
         }
     }
 
-    y += rowSize * 0.30f
+    y = firstBaseline + layout.statusBaselineOffset
     drawFittedText(
         canvas,
         sig.optString("name", "-"),
@@ -454,7 +454,7 @@ private fun drawSignalBlockResponsive(
         maxWidth
     )
 
-    y += rowSize * 1.48f
+    y = firstBaseline + layout.drawdownBaselineOffset
     if (drawdownBold) {
         drawFittedText(
             canvas,
@@ -479,28 +479,55 @@ private fun drawSignalBlockResponsive(
     }
 }
 
-/** 네 문단의 실제 글꼴 경계를 기준으로 계산한 묶음 중심 위치. */
-private fun signalBlockCenterOffset(
+private data class SignalBlockLayout(
+    val rowBaselineGap: Float,
+    val statusBaselineOffset: Float,
+    val drawdownBaselineOffset: Float,
+    val centerOffset: Float
+)
+
+/**
+ * Scriptable 원본의 세로 스택 비율을 Canvas 기준선으로 변환한다.
+ * 두 신호 행은 별도 spacer 없이 이어지고, 상태/낙폭 앞에는 각각
+ * SPX 2pt/3pt, QQQ 3pt/4pt 간격이 적용된다.
+ */
+private fun signalBlockLayout(
     rowSize: Float,
-    rowGap: Float,
     rowCount: Int,
     drawdownBold: Boolean
-): Float {
+): SignalBlockLayout {
     val statusSize = rowSize * 0.72f
-    val firstTop = if (rowCount > 0) {
-        rowSize + textPaint(rowSize, COLOR_WHITE, true).fontMetrics.top
+    val drawdownSize = rowSize * if (drawdownBold) 0.76f else 0.78f
+    val rowMetrics = textPaint(rowSize, COLOR_WHITE, true).fontMetrics
+    val statusMetrics = textPaint(statusSize, COLOR_P2, false).fontMetrics
+    val drawdownMetrics = if (drawdownBold) {
+        textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics
     } else {
-        rowSize * 1.30f + textPaint(statusSize, COLOR_P2, false).fontMetrics.top
+        mediumTextPaint(drawdownSize, COLOR_WHITE).fontMetrics
     }
 
-    val drawdownSize = rowSize * if (drawdownBold) 0.76f else 0.78f
-    val drawdownBaseline = rowSize + rowGap * rowCount + rowSize * 0.30f + rowSize * 1.48f
-    val drawdownBottom = drawdownBaseline + if (drawdownBold) {
-        textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics.bottom
+    val basePointSize = if (drawdownBold) 15f else 14f
+    val statusSpacer = rowSize * (if (drawdownBold) 3f else 2f) / basePointSize
+    val drawdownSpacer = rowSize * (if (drawdownBold) 4f else 3f) / basePointSize
+    val rowBaselineGap = rowMetrics.bottom - rowMetrics.top
+
+    val statusBaselineOffset = if (rowCount > 0) {
+        val lastRowBaseline = (rowCount - 1) * rowBaselineGap
+        lastRowBaseline + rowMetrics.bottom + statusSpacer - statusMetrics.top
     } else {
-        mediumTextPaint(drawdownSize, COLOR_WHITE).fontMetrics.bottom
+        0f
     }
-    return (firstTop + drawdownBottom) / 2f
+    val drawdownBaselineOffset = statusBaselineOffset +
+        statusMetrics.bottom + drawdownSpacer - drawdownMetrics.top
+    val firstTop = if (rowCount > 0) rowMetrics.top else statusMetrics.top
+    val lastBottom = drawdownBaselineOffset + drawdownMetrics.bottom
+
+    return SignalBlockLayout(
+        rowBaselineGap = rowBaselineGap,
+        statusBaselineOffset = statusBaselineOffset,
+        drawdownBaselineOffset = drawdownBaselineOffset,
+        centerOffset = (firstTop + lastBottom) / 2f
+    )
 }
 
 private fun drawSignalRow(
