@@ -8,6 +8,8 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
@@ -189,7 +191,11 @@ private fun FgiWidgetContent(data: JSONObject?) {
 @Composable
 private fun WidgetShell(content: @Composable () -> Unit) {
     Column(
-        modifier = GlanceModifier.fillMaxSize().background(black).padding(10.dp),
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(black)
+            .clickable(actionStartActivity<MainActivity>())
+            .padding(10.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally
     ) { content() }
