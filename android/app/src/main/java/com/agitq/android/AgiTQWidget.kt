@@ -1,6 +1,5 @@
 package com.agitq.android
 
-import android.content.Intent
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -8,7 +7,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.GlanceAppWidget
@@ -186,16 +184,12 @@ private fun FgiWidgetContent(data: JSONObject?) {
 
 @Composable
 private fun WidgetShell(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val launchIntent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-    }
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(black)
             .padding(10.dp)
-            .clickable(actionStartActivity(launchIntent)),
+            .clickable(actionStartActivity<MainActivity>()),
         verticalAlignment = Alignment.Vertical.CenterVertically,
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally
     ) { content() }
