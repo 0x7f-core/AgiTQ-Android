@@ -1,17 +1,16 @@
 package com.agitq.android
 
 import android.content.Context
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.glance.Alignment
-import androidx.glance.Composable
 import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
-import androidx.glance.Modifier
+import androidx.glance.Alignment
 import androidx.glance.background
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.provideContent
-import androidx.glance.layout.Arrangement
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -53,7 +52,7 @@ private fun WidgetContent(data: JSONObject?) {
     val large = size.height >= 180.dp
 
     Column(
-        modifier = Modifier
+        modifier = GlanceModifier
             .fillMaxSize()
             .background(black)
             .padding(10.dp),
@@ -76,7 +75,7 @@ private fun WidgetContent(data: JSONObject?) {
                     text = "공포·탐욕 지수",
                     style = TextStyle(color = white, fontWeight = FontWeight.Bold)
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(GlanceModifier.height(6.dp))
                 Text(
                     text = fgi.optInt("value", 0).toString(),
                     style = TextStyle(
@@ -94,7 +93,7 @@ private fun WidgetContent(data: JSONObject?) {
                     text = "아기티큐 200큐큐단 (QQQ)",
                     style = TextStyle(color = white, fontWeight = FontWeight.Bold)
                 )
-                Spacer(Modifier.height(5.dp))
+                Spacer(GlanceModifier.height(5.dp))
                 Text(
                     text = "QQQ ${"%.2f".format(qqq.optDouble("price", 0.0))}",
                     style = TextStyle(color = white, fontWeight = FontWeight.Bold)
@@ -110,10 +109,9 @@ private fun WidgetContent(data: JSONObject?) {
                     style = TextStyle(color = white)
                 )
                 SignalLines(spxSig, gray, red)
-                Spacer(Modifier.height(8.dp))
+                Spacer(GlanceModifier.height(8.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = GlanceModifier.fillMaxWidth()
                 ) {
                     Column {
                         Text("CNN FGI", style = TextStyle(color = gray))
@@ -122,6 +120,7 @@ private fun WidgetContent(data: JSONObject?) {
                             style = TextStyle(color = white, fontWeight = FontWeight.Bold)
                         )
                     }
+                    Spacer(GlanceModifier.height(1.dp))
                     Column {
                         Text(fgi.optString("rating", "-"), style = TextStyle(color = gray))
                         Text(
@@ -137,7 +136,7 @@ private fun WidgetContent(data: JSONObject?) {
 
 @Composable
 private fun SignalLines(sig: JSONObject, gray: ColorProvider, red: ColorProvider) {
-    Spacer(Modifier.height(5.dp))
+    Spacer(GlanceModifier.height(5.dp))
     val alert = sig.optBoolean("alert", false)
     Text(
         text = sig.optString("name", "-"),
