@@ -9,31 +9,66 @@ import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
 
 /**
- * 미국 주식시장(NYSE/Nasdaq 공통) 정규장 자동 갱신용 시간 판정.
+ * 미국 주식시장(NYSE/Nasdaq 공통) 자동 갱신 시간 판정.
  *
  * - 기준 시간대: America/New_York (EST/EDT 자동 반영)
  * - 정규장: 09:30 이상, 16:00 미만
+ * - 종가 최종 동기화: 16:00 이상, 17:00 미만에 거래일별 한 번
  * - 주말 및 정기 휴장일에는 자동 갱신하지 않음
  * - 임시 휴장 같은 비정기 이벤트는 별도 서버 캘린더가 없는 한 자동 판정할 수 없음
  */
 object UsMarketHours {
+    enum class AutomaticRefreshReason {
+        REGULAR_SESSION,
+        FINAL_CLOSE_SYNC
+    }
+
+    data class AutomaticRefreshDecision(
+        val reason: AutomaticRefreshReason,
+        val tradingDate: LocalDate
+    )
+
     private val NEW_YORK: ZoneId = ZoneId.of("America/New_York")
     private val REGULAR_OPEN: LocalTime = LocalTime.of(9, 30)
     private val REGULAR_CLOSE: LocalTime = LocalTime.of(16, 0)
+    private val FINAL_CLOSE_SYNC_END: LocalTime = LocalTime.of(17, 0)
 
     fun isRegularSessionNow(now: ZonedDateTime = ZonedDateTime.now(NEW_YORK)): Boolean {
+        return automaticRefreshDecision(null, now)?.reason == AutomaticRefreshReason.REGULAR_SESSION
+    }
+
+    /**
+     * WorkManager의 30분 주기는 예약 시점과 Android 절전 정책에 따라 정각에서 어긋날 수 있다.
+     * 정규장에는 매 실행을 허용하고, 16:00~17:00에는 해당 거래일의 종가 동기화가 아직
+     * 완료되지 않았을 때만 한 번 더 실행한다.
+     */
+    fun automaticRefreshDecision(
+        lastFinalCloseSyncDate: LocalDate?,
+        now: ZonedDateTime = ZonedDateTime.now(NEW_YORK)
+    ): AutomaticRefreshDecision? {
         val nyNow = now.withZoneSameInstant(NEW_YORK)
         val date = nyNow.toLocalDate()
         val time = nyNow.toLocalTime()
 
+        if (!isTradingDay(date)) return null
+
+        if (!time.isBefore(REGULAR_OPEN) && time.isBefore(REGULAR_CLOSE)) {
+            return AutomaticRefreshDecision(AutomaticRefreshReason.REGULAR_SESSION, date)
+        }
+
+        if (!time.isBefore(REGULAR_CLOSE) && time.isBefore(FINAL_CLOSE_SYNC_END) &&
+            lastFinalCloseSyncDate != date) {
+            return AutomaticRefreshDecision(AutomaticRefreshReason.FINAL_CLOSE_SYNC, date)
+        }
+
+        return null
+    }
+
+    private fun isTradingDay(date: LocalDate): Boolean {
         if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) {
             return false
         }
-        if (isRecurringMarketHoliday(date)) {
-            return false
-        }
-
-        return !time.isBefore(REGULAR_OPEN) && time.isBefore(REGULAR_CLOSE)
+        return !isRecurringMarketHoliday(date)
     }
 
     private fun isRecurringMarketHoliday(date: LocalDate): Boolean {
