@@ -277,7 +277,7 @@ function renderFGI(fgi) {
   const avgColor = Number.isFinite(avg30) ? fgiColor(avg30) : C.p2;
   statsEl.innerHTML = `
     <span style="color:${fgiColor(value)}">현재 ${value.toFixed(0)}</span>
-    <span class="fgi-slash"> / </span>
+    <span class="fgi-slash">&nbsp;/&nbsp;</span>
     <span style="color:${avgColor}">30일 평균 ${avgText}</span>`;
 }
 
