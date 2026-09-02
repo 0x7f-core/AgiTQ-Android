@@ -2,7 +2,15 @@ name: Deploy Web
 on:
   push:
     branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
+
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pages: write
@@ -15,6 +23,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check web JavaScript syntax
+        run: |
+          node --check web/js/api.js
+          node --check web/js/app.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

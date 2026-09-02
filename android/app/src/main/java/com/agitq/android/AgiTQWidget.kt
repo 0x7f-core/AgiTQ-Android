@@ -59,10 +59,25 @@ private val COLOR_CP = AndroidColor.rgb(128, 223, 255)
 private val COLOR_UPPER = AndroidColor.rgb(224, 112, 192)
 private val COLOR_LOWER = AndroidColor.rgb(175, 212, 133)
 private val COLOR_ALERT = AndroidColor.rgb(255, 77, 77)
+private val TYPEFACE_NORMAL = Typeface.create("sans-serif", Typeface.NORMAL)
+private val TYPEFACE_BOLD = Typeface.create("sans-serif", Typeface.BOLD)
+private val TYPEFACE_MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
 private enum class CardKind { SPX, QQQ, FGI }
 private enum class LayoutMode { WIDE, STACKED, TALL }
 private val RefreshKindKey = ActionParameters.Key<String>("refresh_kind")
+
+private data class SignalStyle(
+    val rowPointSize: Float,
+    val statusPointSize: Float,
+    val drawdownPointSize: Float,
+    val statusSpacerPointSize: Float,
+    val drawdownSpacerPointSize: Float,
+    val drawdownBold: Boolean
+)
+
+private val SPX_SIGNAL_STYLE = SignalStyle(14f, 10f, 11f, 2f, 3f, false)
+private val QQQ_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
 
 class SpxWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -143,10 +158,16 @@ private fun ResponsiveFullCard(
 
     val bitmap = when (kind) {
         CardKind.SPX -> data?.optJSONObject("SPX")?.let {
-            marketCardBitmap(it, "아기티큐 200슨피단 (SPX)", 0.025, bitmapW, bitmapH, canvasUnitsPerDp)
+            marketCardBitmap(
+                it, "아기티큐 200슨피단 (SPX)", 0.025, SPX_SIGNAL_STYLE,
+                bitmapW, bitmapH, canvasUnitsPerDp
+            )
         }
         CardKind.QQQ -> data?.optJSONObject("QQQ")?.let {
-            marketCardBitmap(it, "아기티큐 200큐큐단 (QQQ)", 0.02, bitmapW, bitmapH, canvasUnitsPerDp)
+            marketCardBitmap(
+                it, "아기티큐 200큐큐단 (QQQ)", 0.02, QQQ_SIGNAL_STYLE,
+                bitmapW, bitmapH, canvasUnitsPerDp
+            )
         }
         CardKind.FGI -> data?.optJSONObject("FGI")?.let {
             fgiCardBitmap(it, bitmapW, bitmapH, canvasUnitsPerDp)
@@ -217,6 +238,7 @@ private fun marketCardBitmap(
     asset: JSONObject,
     title: String,
     bandPct: Double,
+    signalStyle: SignalStyle,
     width: Int,
     height: Int,
     canvasUnitsPerDp: Float
@@ -268,8 +290,8 @@ private fun marketCardBitmap(
                 maxWidth = signalWidth,
                 short = short,
                 densityFactor = 1f,
-                minimumRowSize = (if (bandPct <= 0.02) 15f else 14f) * iosWideScale,
-                drawdownBold = bandPct <= 0.02
+                minimumRowSize = signalStyle.rowPointSize * iosWideScale,
+                signalStyle = signalStyle
             )
         }
 
@@ -292,7 +314,7 @@ private fun marketCardBitmap(
                 short = short,
                 densityFactor = 0.82f,
                 minimumRowSize = 0f,
-                drawdownBold = bandPct <= 0.02
+                signalStyle = signalStyle
             )
         }
 
@@ -315,7 +337,7 @@ private fun marketCardBitmap(
                 short = short,
                 densityFactor = 0.75f,
                 minimumRowSize = 0f,
-                drawdownBold = bandPct <= 0.02
+                signalStyle = signalStyle
             )
         }
     }
@@ -352,7 +374,7 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
     lower.filterNotNullTo(all)
     if (all.isEmpty()) return
 
-    var minV = all.minOrNull() ?: return
+    val minV = all.minOrNull() ?: return
     var maxV = all.maxOrNull() ?: return
     if (maxV <= minV) maxV = minV + 1.0
 
@@ -407,7 +429,7 @@ private fun drawSignalBlockResponsive(
     short: Float,
     densityFactor: Float,
     minimumRowSize: Float,
-    drawdownBold: Boolean
+    signalStyle: SignalStyle
 ) {
     if (sig == null) return
     val isAlert = sig.optBoolean("alert", false)
@@ -419,7 +441,10 @@ private fun drawSignalBlockResponsive(
     val rowCount = if (lines == null) 0 else {
         (0 until min(lines.length(), 2)).count { lines.optJSONArray(it) != null }
     }
-    val layout = signalBlockLayout(rowSize, rowCount, drawdownBold)
+    val layout = signalBlockLayout(rowSize, rowCount, signalStyle)
+    val pointScale = rowSize / signalStyle.rowPointSize
+    val statusSize = signalStyle.statusPointSize * pointScale
+    val drawdownSize = signalStyle.drawdownPointSize * pointScale
     val firstBaseline = verticalCenter?.let { center ->
         center - layout.centerOffset
     } ?: (top + rowSize)
@@ -448,20 +473,20 @@ private fun drawSignalBlockResponsive(
         sig.optString("name", "-"),
         x,
         y,
-        rowSize * 0.72f,
+        statusSize,
         if (isAlert) COLOR_ALERT else COLOR_P2,
         false,
         maxWidth
     )
 
     y = firstBaseline + layout.drawdownBaselineOffset
-    if (drawdownBold) {
+    if (signalStyle.drawdownBold) {
         drawFittedText(
             canvas,
             drawdownText(sig),
             x,
             y,
-            rowSize * 0.76f,
+            drawdownSize,
             COLOR_WHITE,
             true,
             maxWidth
@@ -472,7 +497,7 @@ private fun drawSignalBlockResponsive(
             drawdownText(sig),
             x,
             y,
-            rowSize * 0.78f,
+            drawdownSize,
             COLOR_WHITE,
             maxWidth
         )
@@ -494,21 +519,21 @@ private data class SignalBlockLayout(
 private fun signalBlockLayout(
     rowSize: Float,
     rowCount: Int,
-    drawdownBold: Boolean
+    signalStyle: SignalStyle
 ): SignalBlockLayout {
-    val statusSize = rowSize * 0.72f
-    val drawdownSize = rowSize * if (drawdownBold) 0.76f else 0.78f
+    val pointScale = rowSize / signalStyle.rowPointSize
+    val statusSize = signalStyle.statusPointSize * pointScale
+    val drawdownSize = signalStyle.drawdownPointSize * pointScale
     val rowMetrics = textPaint(rowSize, COLOR_WHITE, true).fontMetrics
     val statusMetrics = textPaint(statusSize, COLOR_P2, false).fontMetrics
-    val drawdownMetrics = if (drawdownBold) {
+    val drawdownMetrics = if (signalStyle.drawdownBold) {
         textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics
     } else {
         mediumTextPaint(drawdownSize, COLOR_WHITE).fontMetrics
     }
 
-    val basePointSize = if (drawdownBold) 15f else 14f
-    val statusSpacer = rowSize * (if (drawdownBold) 3f else 2f) / basePointSize
-    val drawdownSpacer = rowSize * (if (drawdownBold) 4f else 3f) / basePointSize
+    val statusSpacer = signalStyle.statusSpacerPointSize * pointScale
+    val drawdownSpacer = signalStyle.drawdownSpacerPointSize * pointScale
     val rowBaselineGap = rowMetrics.bottom - rowMetrics.top
 
     val statusBaselineOffset = if (rowCount > 0) {
@@ -786,12 +811,14 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
         strokeJoin = Paint.Join.ROUND
     })
 
+    val pointPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     values.forEachIndexed { i, v ->
+        pointPaint.color = fgiAndroidColor(v)
         canvas.drawCircle(
             toX(i),
             toY(v),
             4f * scale,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(v) }
+            pointPaint
         )
     }
 }
@@ -812,16 +839,18 @@ private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
     val radius = 120f
     val arcThick = 10f
 
+    val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     for (i in 0 until 120) {
         val t = i / 119.0
         val angle = Math.PI + t * Math.PI
         val x = cx + cos(angle).toFloat() * radius
         val y = cy + sin(angle).toFloat() * radius
+        arcPaint.color = fgiAndroidColor(t * 100.0)
         canvas.drawCircle(
             sx(x),
             sy(y),
             arcThick * scale / 2f,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fgiAndroidColor(t * 100.0) }
+            arcPaint
         )
     }
 
@@ -1001,7 +1030,7 @@ private fun textPaint(
     this.color = color
     textSize = size
     textAlign = align
-    typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
+    typeface = if (bold) TYPEFACE_BOLD else TYPEFACE_NORMAL
 }
 
 private fun mediumTextPaint(
@@ -1012,7 +1041,7 @@ private fun mediumTextPaint(
     this.color = color
     textSize = size
     textAlign = align
-    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    typeface = TYPEFACE_MEDIUM
 }
 
 private fun drawdownText(sig: JSONObject?): String {

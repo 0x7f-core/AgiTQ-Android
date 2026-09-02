@@ -27,6 +27,8 @@ Deploy `cloudflare/worker.js` as a Cloudflare Worker. The public endpoint must b
 
 The Worker fetches Yahoo Finance and CNN FGI data and returns one validated JSON payload to both the website and Android widgets. It keeps a five-minute edge cache and a seven-day last-known-good response for temporary upstream failures.
 
+Yahoo and CNN requests run concurrently. SPX/QQQ and TQQQ histories are aligned by the New York trading date so small live-quote timestamp differences cannot drop the current session from the Scriptable strategy calculation.
+
 ### 2. Connect the web dashboard
 
 Edit `web/js/api.js` and replace:
@@ -54,3 +56,5 @@ The `build-apk.yml` workflow runs Android unit tests, lint, JavaScript syntax ch
 The strategy logic, Korean labels, colors, chart ranges and signal thresholds intentionally stay close to the supplied Scriptable code. The original Scriptable source is reference-only and is not modified.
 
 Android stores only validated snapshots. Automatic and manual refreshes make one API request and then update all three widgets from the same snapshot. If a refresh fails, the last valid display remains in place. Automatic refresh is routed only through WorkManager and runs during the US regular session; manual refresh remains available at any time.
+
+Release APKs use R8/resource shrinking, and the dashboard pauses its five-minute timer while hidden. These optimizations do not change the displayed Scriptable values or UI proportions.

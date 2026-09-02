@@ -283,6 +283,9 @@ function renderFGI(fgi) {
 
 let activeRequest = null;
 let requestSequence = 0;
+let lastSuccessfulRenderAt = 0;
+let autoRefreshTimer = null;
+const AUTO_REFRESH_MS = 300000;
 
 async function renderDashboard({ force = false } = {}) {
   if (activeRequest && !force) return activeRequest.promise;
@@ -305,6 +308,7 @@ async function renderDashboard({ force = false } = {}) {
       renderSignal('spx-info', data.SPX?.signal);
       renderSignal('qqq-info', data.QQQ?.signal);
       renderFGI(data.FGI);
+      lastSuccessfulRenderAt = Date.now();
 
       if (data.cache?.stale) {
         errorEl.textContent = '새 데이터 연결 지연: 마지막 정상 데이터를 표시합니다.';
@@ -324,8 +328,27 @@ async function renderDashboard({ force = false } = {}) {
   return promise;
 }
 
-renderDashboard();
-setInterval(() => renderDashboard(), 300000);
+function scheduleAutoRefresh(delay = AUTO_REFRESH_MS) {
+  clearTimeout(autoRefreshTimer);
+  if (document.hidden) return;
+  autoRefreshTimer = setTimeout(async () => {
+    await renderDashboard();
+    scheduleAutoRefresh();
+  }, Math.max(1000, delay));
+}
+
+renderDashboard().finally(() => scheduleAutoRefresh());
+
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(autoRefreshTimer);
+  if (document.hidden) return;
+  const elapsed = Date.now() - lastSuccessfulRenderAt;
+  if (!lastSuccessfulRenderAt || elapsed >= AUTO_REFRESH_MS) {
+    renderDashboard().finally(() => scheduleAutoRefresh());
+  } else {
+    scheduleAutoRefresh(AUTO_REFRESH_MS - elapsed);
+  }
+});
 
 
 const manualRefreshButton = document.getElementById('manual-refresh');
@@ -341,6 +364,7 @@ if (manualRefreshButton) {
       manualRefreshButton.disabled = false;
       manualRefreshButton.classList.remove('refreshing');
       manualRefreshButton.textContent = '↻ 새로고침';
+      scheduleAutoRefresh();
     }
   });
 }

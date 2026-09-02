@@ -8,9 +8,9 @@ object WidgetRefreshCoordinator {
     suspend fun refreshAll(context: Context): MarketSnapshotRepository.RefreshResult {
         val result = MarketSnapshotRepository.refresh(context)
 
-        // 정상 데이터나 마지막 정상 데이터가 있을 때만 다시 렌더링한다.
-        // 데이터가 전혀 없는 실패는 현재 표시를 그대로 보존한다.
-        if (result.data != null) {
+        // 새 스냅샷일 때만 다시 그린다. 실패 시에는 이미 표시 중인 마지막 정상
+        // 비트맵을 그대로 두어 동일 데이터의 불필요한 3회 렌더링을 피한다.
+        if (result.isFresh) {
             updateAll(context)
         }
         return result

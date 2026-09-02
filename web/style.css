@@ -115,9 +115,20 @@ canvas{display:block;max-width:100%}
   padding-left:0;
 }
 
+#spx-info{
+  --signal-size:clamp(17px,2.65vw,31px);
+  --status-size:clamp(12.143px,1.893vw,22.143px);
+  --drawdown-size:clamp(13.357px,2.082vw,24.357px);
+}
+#qqq-info{
+  --signal-size:clamp(18.214px,2.839vw,33.214px);
+  --status-size:clamp(13.357px,2.082vw,24.357px);
+  --drawdown-size:clamp(13.357px,2.082vw,24.357px);
+}
+
 .sig-row{
   color:var(--p1);
-  font-size:clamp(17px,2.65vw,31px);
+  font-size:var(--signal-size);
   line-height:1.35;
   font-weight:700;
   letter-spacing:-.3px;
@@ -127,12 +138,12 @@ canvas{display:block;max-width:100%}
 .token-spym{color:var(--spym)}
 .token-sgov{color:var(--sgov)}
 .token-dot{color:var(--dot)}
-.token-action{color:var(--p1);margin-left:.30em}
+.token-action{color:var(--p1);margin-left:.25em}
 .token-alert{color:var(--alert)}
 
 .status-text{
   color:var(--status);
-  font-size:clamp(12px,1.7vw,21px);
+  font-size:var(--status-size);
   line-height:1.25;
   font-weight:400;
   letter-spacing:-.2px;
@@ -141,7 +152,7 @@ canvas{display:block;max-width:100%}
 
 .dd-text{
   color:var(--p1);
-  font-size:clamp(14px,1.95vw,24px);
+  font-size:var(--drawdown-size);
   line-height:1.2;
   font-weight:700;
   letter-spacing:-.25px;
@@ -166,7 +177,6 @@ canvas{display:block;max-width:100%}
   align-items:center;
   justify-content:center;
   text-align:center;
-  transform:translateY(4px);
 }
 .fgi-info-box canvas{
   width:min(100%,360px);
@@ -174,14 +184,14 @@ canvas{display:block;max-width:100%}
   aspect-ratio:320/180;
 }
 .fgi-rating{
-  margin-top:5px;
+  margin-top:.133333em;
   font-size:clamp(17px,2.5vw,30px);
   line-height:1.2;
   font-weight:700;
   white-space:nowrap;
 }
 .fgi-stats{
-  margin-top:10px;
+  margin-top:.230769em;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -213,11 +223,18 @@ canvas{display:block;max-width:100%}
   .version{font-size:clamp(9px,2.35vw,11px)}
   .updated-time{font-size:clamp(9px,2.55vw,12px);margin-top:4px}
   .content-row{gap:6px;padding-top:3px}
-  .sig-row{font-size:clamp(12px,3.65vw,17px)}
-  .status-text{font-size:clamp(9px,2.55vw,12px)}
-  .dd-text{font-size:clamp(10px,2.9vw,13px)}
-  .fgi-rating{font-size:clamp(12px,3.6vw,17px);margin-top:2px}
-  .fgi-stats{font-size:clamp(10px,2.9vw,14px);gap:3px;margin-top:5px}
+  #spx-info{
+    --signal-size:clamp(12px,3.65vw,17px);
+    --status-size:clamp(8.571px,2.607vw,12.143px);
+    --drawdown-size:clamp(9.429px,2.868vw,13.357px);
+  }
+  #qqq-info{
+    --signal-size:clamp(12.857px,3.911vw,18.214px);
+    --status-size:clamp(9.429px,2.868vw,13.357px);
+    --drawdown-size:clamp(9.429px,2.868vw,13.357px);
+  }
+  .fgi-rating{font-size:clamp(12px,3.6vw,17px)}
+  .fgi-stats{font-size:clamp(10px,2.9vw,14px);gap:3px}
   .fgi-info-box canvas{width:100%}
 }
 

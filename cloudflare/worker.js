@@ -1,7 +1,15 @@
 const CACHE_TTL = 300;
 const STALE_CACHE_TTL = 7 * 24 * 60 * 60;
-const UPSTREAM_TIMEOUT_MS = 12000;
+// Two attempts must finish before the Android/Web 20-second client timeout.
+const UPSTREAM_TIMEOUT_MS = 8000;
 const UPSTREAM_ATTEMPTS = 2;
+
+const NEW_YORK_DATE = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 const YAHOO = {
   SPX: 'https://query1.finance.yahoo.com/v8/finance/chart/^GSPC?range=500d&interval=1d',
@@ -67,10 +75,11 @@ async function fetchWithRetry(url, options = {}, attempts = UPSTREAM_ATTEMPTS) {
 
 function sma(data, period) {
   const out = new Array(data.length).fill(null);
-  for (let i = period - 1; i < data.length; i++) {
-    let sum = 0;
-    for (let j = 0; j < period; j++) sum += data[i - j];
-    out[i] = sum / period;
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += data[i];
+    if (i >= period) sum -= data[i - period];
+    if (i >= period - 1) out[i] = sum / period;
   }
   return out;
 }
@@ -78,7 +87,6 @@ function sma(data, period) {
 function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
   const ma = sma(sig.closes, period);
   let position = 'BELOW';
-  let buyStage = 0;
   let localPeak = 0;
   let tsArmed = true;
   let daysAbove = 0;
@@ -88,7 +96,7 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
   for (let i = 0; i < sig.closes.length; i++) {
     const cSig = sig.closes[i];
     const cSma = ma[i];
-    const cTqqq = tqqq.closes[Math.min(i, tqqq.closes.length - 1)];
+    const cTqqq = tqqq.closes[i];
     if (!Number.isFinite(cSma) || !Number.isFinite(cTqqq)) continue;
 
     const bUp = cSma * (1 + upB);
@@ -98,13 +106,11 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
     else if (cSig < bDown) todayPos = 'BELOW';
 
     if (position === 'BELOW' && todayPos === 'ABOVE') {
-      buyStage = 1;
       localPeak = cTqqq;
       tsArmed = true;
       daysAbove = 1;
       isAlert = false;
     } else if (position === 'ABOVE' && todayPos === 'BELOW') {
-      buyStage = 0;
       localPeak = 0;
       daysAbove = 0;
       isAlert = false;
@@ -125,7 +131,6 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
 
       isAlert = triggerTs;
       alertMsg = triggerTs ? '🚨 긴급대피 발동 (TS -25%)' : '';
-      if (buyStage > 0 && buyStage <= 3) buyStage++;
     }
 
     position = todayPos;
@@ -150,18 +155,22 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
   return { name:`상단 밴드 위 ${daysAbove}일 차 (추세 유지)`, alert:false, lines:[['TQQQ','보유 유지'],['SPYM','추가 매수']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
 }
 
-// Yahoo 종목별 누락 거래일이 생겨도 같은 날짜끼리만 전략 계산에 사용한다.
-// 정상 응답에서는 원본 Scriptable의 인덱스 계산과 결과가 동일하다.
+function marketDateKey(timestamp) {
+  return NEW_YORK_DATE.format(new Date(Number(timestamp) * 1000));
+}
+
+// Yahoo 종목별 누락 거래일이나 실시간 시각 차이가 있어도 같은 뉴욕 거래일끼리만
+// 전략 계산에 사용한다. 정상 응답에서는 원본 Scriptable의 인덱스 결과와 동일하다.
 function alignForSignal(sig, tqqq) {
-  const tqqqByTimestamp = new Map(
-    tqqq.timestamps.map((timestamp, index) => [timestamp, tqqq.closes[index]])
+  const tqqqByDate = new Map(
+    tqqq.timestamps.map((timestamp, index) => [marketDateKey(timestamp), tqqq.closes[index]])
   );
   const timestamps = [];
   const sigCloses = [];
   const tqqqCloses = [];
 
   sig.timestamps.forEach((timestamp, index) => {
-    const leveragedClose = tqqqByTimestamp.get(timestamp);
+    const leveragedClose = tqqqByDate.get(marketDateKey(timestamp));
     const signalClose = sig.closes[index];
     if (Number.isFinite(signalClose) && Number.isFinite(leveragedClose)) {
       timestamps.push(timestamp);
@@ -202,11 +211,7 @@ async function yahoo(url) {
   if (!Number.isFinite(mTime) || mTime <= 0 || !Number.isFinite(price) || price <= 0) {
     throw new Error('Yahoo invalid market metadata');
   }
-  const day = x => new Intl.DateTimeFormat('en-US', {
-    timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit'
-  }).format(new Date(x * 1000));
-
-  if (timestamps.length && day(timestamps[timestamps.length - 1]) === day(mTime)) {
+  if (timestamps.length && marketDateKey(timestamps[timestamps.length - 1]) === marketDateKey(mTime)) {
     closes[closes.length-1] = price;
   } else {
     closes.push(price);
@@ -258,6 +263,8 @@ async function fetchFGI() {
   throw new Error('CNN response format changed');
 }
 
+export { sma, analyzeSignal, alignForSignal, marketDateKey };
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -265,7 +272,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok:true, service:'AgiTQ API', version:'4.23' });
+      return json({ ok:true, service:'AgiTQ API', version:'4.29' });
     }
 
     if (url.pathname !== '/api/market') {
@@ -291,10 +298,17 @@ export default {
       : null;
 
     try {
-      const results = await Promise.allSettled([
-        yahoo(YAHOO.SPX),
-        yahoo(YAHOO.QQQ),
-        yahoo(YAHOO.TQQQ),
+      // CNN과 Yahoo를 동시에 시작해 최악 응답 시간을 한 재시도 구간 안으로 제한한다.
+      const [results, fgiResult] = await Promise.all([
+        Promise.allSettled([
+          yahoo(YAHOO.SPX),
+          yahoo(YAHOO.QQQ),
+          yahoo(YAHOO.TQQQ),
+        ]),
+        fetchFGI().then(
+          history => ({ history, error: null }),
+          error => ({ history: [], error: error?.message || String(error) }),
+        ),
       ]);
       const labels = ['SPX', 'QQQ', 'TQQQ'];
       const failures = results
@@ -307,12 +321,9 @@ export default {
 
       // FGI is kept separate so a temporary CNN block does not take down
       // the entire market API. This is important for Android widgets.
-      let fgi = [];
-      let fgiError = null;
-      try {
-        fgi = await fetchFGI();
-      } catch (e) {
-        fgiError = e.message;
+      let fgi = fgiResult.history;
+      const fgiError = fgiResult.error;
+      if (fgiError) {
         if (staleData?.FGI?.available && Array.isArray(staleData.FGI.history)) {
           fgi = staleData.FGI.history;
         }
@@ -328,7 +339,7 @@ export default {
         : null;
 
       const payload = {
-        version:'v4.23',
+        version:'v4.29',
         updated:new Date().toISOString(),
         SPX:{ price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal },
         QQQ:{ price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal },
