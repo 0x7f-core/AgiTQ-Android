@@ -61,7 +61,12 @@ jobs:
         working-directory: android
         run: |
           ls -lah app/build/outputs/apk/release/
-          test -n "$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)"
+          apk="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$apk"
+          unzip -p "$apk" classes.dex | strings > "$RUNNER_TEMP/agitq-dex-strings.txt"
+          for widget in SpxWidget QqqWidget FgiWidget; do
+            grep -q "Lcom/agitq/android/${widget};" "$RUNNER_TEMP/agitq-dex-strings.txt"
+          done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

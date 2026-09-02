@@ -1,7 +1,10 @@
 package com.agitq.android
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
-import androidx.glance.appwidget.updateAll
+import androidx.glance.appwidget.AppWidgetId
+import androidx.glance.appwidget.GlanceAppWidget
 
 /** 한 번의 API 응답으로 설치된 세 위젯을 같은 시점의 데이터로 갱신한다. */
 object WidgetRefreshCoordinator {
@@ -18,9 +21,29 @@ object WidgetRefreshCoordinator {
 
     suspend fun updateAll(context: Context) {
         var firstError: Throwable? = null
-        runCatching { SpxWidget().updateAll(context) }.onFailure { firstError = it }
-        runCatching { QqqWidget().updateAll(context) }.onFailure { if (firstError == null) firstError = it }
-        runCatching { FgiWidget().updateAll(context) }.onFailure { if (firstError == null) firstError = it }
+        runCatching { updateProvider(context, SpxWidget(), SpxWidgetReceiver::class.java) }
+            .onFailure { firstError = it }
+        runCatching { updateProvider(context, QqqWidget(), QqqWidgetReceiver::class.java) }
+            .onFailure { if (firstError == null) firstError = it }
+        runCatching { updateProvider(context, FgiWidget(), FgiWidgetReceiver::class.java) }
+            .onFailure { if (firstError == null) firstError = it }
         firstError?.let { throw it }
+    }
+
+    /**
+     * Resolve IDs from the stable Android receiver component instead of the
+     * Glance implementation class. This keeps each installed widget bound to
+     * its original type even across R8-optimized in-place app upgrades.
+     */
+    private suspend fun updateProvider(
+        context: Context,
+        widget: GlanceAppWidget,
+        receiverClass: Class<*>
+    ) {
+        val manager = AppWidgetManager.getInstance(context)
+        val component = ComponentName(context, receiverClass)
+        manager.getAppWidgetIds(component).forEach { appWidgetId ->
+            widget.update(context, AppWidgetId(appWidgetId))
+        }
     }
 }

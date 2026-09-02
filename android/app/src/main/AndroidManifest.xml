@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:name=".AgiTQApp" android:theme="@style/AppTheme" android:label="AgiTQ">
+    <application
+        android:name=".AgiTQApp"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
+        android:label="AgiTQ">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -8,17 +13,17 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".SpxWidgetReceiver" android:exported="true" android:label="AgiTQ SPX">
+        <receiver android:name=".SpxWidgetReceiver" android:exported="true" android:label="@string/agitq_widget_spx_name">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_spx_info" />
         </receiver>
 
-        <receiver android:name=".QqqWidgetReceiver" android:exported="true" android:label="AgiTQ QQQ">
+        <receiver android:name=".QqqWidgetReceiver" android:exported="true" android:label="@string/agitq_widget_qqq_name">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_qqq_info" />
         </receiver>
 
-        <receiver android:name=".FgiWidgetReceiver" android:exported="true" android:label="AgiTQ FGI">
+        <receiver android:name=".FgiWidgetReceiver" android:exported="true" android:label="@string/agitq_widget_fgi_name">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/agitq_widget_fgi_info" />
         </receiver>
