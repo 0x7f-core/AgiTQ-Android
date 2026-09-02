@@ -255,22 +255,24 @@ private fun marketCardBitmap(
     val titleSize = withIosWideFontFloor(
         (short * 0.0615f).coerceIn(22f, 38f), 16f, mode, iosWideScale
     )
-    val versionSize = withIosWideFontFloor(
-        (short * 0.0365f).coerceIn(13f, 22f), 8f, mode, iosWideScale
-    )
-    val timeSize = withIosWideFontFloor(
-        (short * 0.0405f).coerceIn(15f, 25f), 10f, mode, iosWideScale
-    )
+    // iOS QQQ 원본 헤더 16pt : 버전 8pt : 기준시각 10pt.
+    val versionSize = titleSize * (8f / 16f)
+    val timeSize = titleSize * (10f / 16f)
     val titleY = pad + titleSize
 
     drawText(canvas, title, pad, titleY, titleSize, COLOR_WHITE, true)
-    drawText(canvas, SCRIPTABLE_VERSION, width - pad, titleY - 2f, versionSize, COLOR_P2, false, Paint.Align.RIGHT)
+    val versionY = titleY + textPaint(titleSize, COLOR_WHITE, true).fontMetrics.top -
+        textPaint(versionSize, COLOR_P2, false).fontMetrics.top
+    drawText(canvas, SCRIPTABLE_VERSION, width - pad, versionY, versionSize, COLOR_P2, false, Paint.Align.RIGHT)
 
-    val timeY = titleY + timeSize * 1.45f
+    val titleBottom = textPaint(titleSize, COLOR_WHITE, true).fontMetrics.bottom
+    val timeTop = textPaint(timeSize, COLOR_WHITE, false).fontMetrics.top
+    val timeY = titleY + titleBottom + titleSize * (3f / 16f) - timeTop
     drawText(canvas, formatMarketTime(asset.optLong("mTime", 0L)), pad, timeY, timeSize, COLOR_WHITE)
 
     val sig = asset.optJSONObject("signal")
-    val contentTop = timeY + pad * 0.55f
+    val timeBottom = textPaint(timeSize, COLOR_WHITE, false).fontMetrics.bottom
+    val contentTop = timeY + timeBottom + titleSize * (5f / 16f)
     val bottom = height - pad * 0.75f
 
     when (mode) {
@@ -514,7 +516,8 @@ private fun signalBlockLayout(
 
     val statusSpacer = signalStyle.statusSpacerPointSize * pointScale
     val drawdownSpacer = signalStyle.drawdownSpacerPointSize * pointScale
-    val rowBaselineGap = rowMetrics.bottom - rowMetrics.top
+    // Scriptable의 15pt 시스템 글꼴 기본 행 높이에 대응하는 단일 1.20 비율.
+    val rowBaselineGap = rowSize * 1.20f
 
     val statusBaselineOffset = if (rowCount > 0) {
         val lastRowBaseline = (rowCount - 1) * rowBaselineGap
@@ -637,7 +640,8 @@ private fun fgiCardBitmap(
     val titleY = pad + titleSize
     drawText(canvas, "공포와 탐욕 지수 (CNN FGI)", pad, titleY, titleSize, COLOR_WHITE, true)
 
-    val contentTop = titleY + pad * 0.75f
+    val titleBottom = textPaint(titleSize, COLOR_WHITE, true).fontMetrics.bottom
+    val contentTop = titleY + titleBottom + titleSize * (3f / 16f)
     val bottom = height - pad * 0.75f
 
     when (mode) {
@@ -660,7 +664,6 @@ private fun fgiCardBitmap(
                 RectF(rightLeft, contentTop, rightRight, gaugeBottom)
             )
 
-            val rawRatingY = contentTop + (bottom - contentTop) * 0.72f
             val textSizes = fittedFgiTextSizes(
                 rating,
                 value,
@@ -668,10 +671,12 @@ private fun fgiCardBitmap(
                 withIosWideFontFloor(
                     (short * 0.050f).coerceIn(18f, 30f), 13f, mode, iosWideScale
                 ),
-                rightRight - rightLeft
+                rightRight - rightLeft,
+                bottom - gaugeBottom
             )
+            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
             val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats, bottom
+                rawRatingY, textSizes.rating, textSizes.stats
             )
             drawText(
                 canvas, rating, rightCenter, ratingY, textSizes.rating,
@@ -705,16 +710,17 @@ private fun fgiCardBitmap(
             )
 
             val centerX = width / 2f
-            val rawRatingY = gaugeBottom + short * 0.060f
             val textSizes = fittedFgiTextSizes(
                 rating,
                 value,
                 avg30,
                 (short * 0.044f).coerceIn(17f, 28f),
-                width - pad * 2f
+                width - pad * 2f,
+                bottom - gaugeBottom
             )
+            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
             val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats, bottom
+                rawRatingY, textSizes.rating, textSizes.stats
             )
             drawText(
                 canvas, rating, centerX, ratingY, textSizes.rating,
@@ -748,16 +754,17 @@ private fun fgiCardBitmap(
             )
 
             val centerX = width / 2f
-            val rawRatingY = gaugeBottom + short * 0.075f
             val textSizes = fittedFgiTextSizes(
                 rating,
                 value,
                 avg30,
                 (short * 0.043f).coerceIn(16f, 27f),
-                width - pad * 1.5f
+                width - pad * 1.5f,
+                bottom - gaugeBottom
             )
+            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
             val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats, bottom
+                rawRatingY, textSizes.rating, textSizes.stats
             )
             drawText(
                 canvas, rating, centerX, ratingY, textSizes.rating,
@@ -897,12 +904,19 @@ private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
 
 private data class FgiTextSizes(val rating: Float, val stats: Float)
 
+/** iOS Large FGI의 게이지 → 2pt spacer → 15pt 등급 문장 구조. */
+private fun fgiRatingBaseline(gaugeBottom: Float, ratingSize: Float): Float {
+    val ratingTop = textPaint(ratingSize, COLOR_WHITE, true).fontMetrics.top
+    return gaugeBottom + ratingSize * (2f / 15f) - ratingTop
+}
+
 private fun fittedFgiTextSizes(
     rating: String,
     value: Double,
     avg30: Double,
     requestedStatsSize: Float,
-    maxWidth: Float
+    maxWidth: Float,
+    maxHeight: Float
 ): FgiTextSizes {
     val now = "현재 ${value.roundToInt()}"
     val slash = " / "
@@ -917,11 +931,24 @@ private fun fittedFgiTextSizes(
             requestedStatsSize,
             if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2
         ).measureText(avg)
+    val ratingMetrics = textPaint(requestedRatingSize, COLOR_WHITE, true).fontMetrics
+    val statsTop = min(
+        mediumTextPaint(requestedStatsSize, COLOR_WHITE).fontMetrics.top,
+        textPaint(requestedSlashSize, COLOR_WHITE, true).fontMetrics.top
+    )
+    val statsBottom = max(
+        mediumTextPaint(requestedStatsSize, COLOR_WHITE).fontMetrics.bottom,
+        textPaint(requestedSlashSize, COLOR_WHITE, true).fontMetrics.bottom
+    )
+    val blockHeight = requestedRatingSize * (2f / 15f) +
+        (ratingMetrics.bottom - ratingMetrics.top) + requestedStatsSize * (3f / 13f) +
+        (statsBottom - statsTop)
 
     var scale = 1f
     if (ratingWidth > maxWidth && ratingWidth > 0f) scale = min(scale, maxWidth / ratingWidth)
     if (statsWidth > maxWidth && statsWidth > 0f) scale = min(scale, maxWidth / statsWidth)
-    scale = scale.coerceIn(0.62f, 1f)
+    if (blockHeight > maxHeight && blockHeight > 0f) scale = min(scale, maxHeight / blockHeight)
+    scale = scale.coerceIn(0.01f, 1f)
     return FgiTextSizes(requestedRatingSize * scale, requestedStatsSize * scale)
 }
 
@@ -943,16 +970,10 @@ private fun fgiStatsBaseline(
 private fun fittedFgiBaselines(
     requestedRatingBaseline: Float,
     ratingSize: Float,
-    statsSize: Float,
-    bottom: Float
+    statsSize: Float
 ): Pair<Float, Float> {
     val requestedStatsBaseline = fgiStatsBaseline(requestedRatingBaseline, ratingSize, statsSize)
-    val statsBottom = max(
-        mediumTextPaint(statsSize, COLOR_WHITE).fontMetrics.bottom,
-        textPaint(statsSize * 15f / 13f, COLOR_WHITE, true).fontMetrics.bottom
-    )
-    val upwardShift = max(0f, requestedStatsBaseline + statsBottom - bottom)
-    return (requestedRatingBaseline - upwardShift) to (requestedStatsBaseline - upwardShift)
+    return requestedRatingBaseline to requestedStatsBaseline
 }
 
 private fun drawFgiStats(

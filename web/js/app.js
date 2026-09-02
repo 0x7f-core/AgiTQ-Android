@@ -239,7 +239,7 @@ function renderSignal(containerId, sig) {
     const token = row?.[0] ?? '';
     const action = row?.[1] ?? '';
     if (isAlert) return `<div class="sig-row"><span class="token-alert">${escapeHtml(`${token} ${action}`)}</span></div>`;
-    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action">${escapeHtml(action)}</span></div>`;
+    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action"> ${escapeHtml(action)}</span></div>`;
   }).join('');
 
   const drawdown = Number(sig.drawdown);
