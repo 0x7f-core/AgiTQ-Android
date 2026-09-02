@@ -76,9 +76,9 @@ private data class SignalStyle(
     val drawdownBold: Boolean
 )
 
-// Android 위젯은 실기기 가독성이 좋은 QQQ 글자 크기로 SPX/QQQ를 통일한다.
-// Scriptable 원본의 종목별 문단 간격과 drawdown 굵기는 각각 유지한다.
-private val SPX_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 2f, 3f, false)
+// Android 위젯은 실기기 가독성이 좋은 QQQ 글자 크기와 문단 간격으로 통일한다.
+// 종목별 drawdown 굵기는 유지한다.
+private val SPX_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, false)
 private val QQQ_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
 
 class SpxWidget : GlanceAppWidget() {

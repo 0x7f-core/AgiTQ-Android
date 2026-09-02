@@ -155,11 +155,11 @@ canvas{display:block;max-width:100%}
   white-space:nowrap;
 }
 
-/* Scriptable 원본: SPX 2pt/3pt, QQQ 3pt/4pt spacer 비율. */
-#spx-info .status-text{margin-top:.2em}
-#spx-info .dd-text{margin-top:.272727em}
-#qqq-info .status-text{margin-top:.272727em}
-#qqq-info .dd-text{margin-top:.363636em}
+/* 웹은 가독성이 좋은 SPX의 2pt/3pt 문단 간격으로 통일한다. */
+#spx-info .status-text,
+#qqq-info .status-text{margin-top:.2em}
+#spx-info .dd-text,
+#qqq-info .dd-text{margin-top:.272727em}
 
 .fgi-card{padding-top:20px}
 .fgi-row{padding-top:8px}
