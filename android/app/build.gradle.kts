@@ -51,6 +51,7 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.11.0")
+    implementation("androidx.compose.foundation:foundation:1.9.1")
     implementation("androidx.compose.ui:ui:1.9.1")
     implementation("androidx.glance:glance-appwidget:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
