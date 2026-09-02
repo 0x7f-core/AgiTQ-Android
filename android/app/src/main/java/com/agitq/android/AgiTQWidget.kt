@@ -76,9 +76,8 @@ private data class SignalStyle(
     val drawdownBold: Boolean
 )
 
-// Android 위젯은 실기기 가독성이 좋은 QQQ 글자 크기와 문단 간격으로 통일한다.
-// 종목별 drawdown 굵기는 유지한다.
-private val SPX_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, false)
+// Android 위젯은 iOS QQQ의 글자 크기·굵기·문단 간격을 단일 기준으로 사용한다.
+private val SPX_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
 private val QQQ_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
 
 class SpxWidget : GlanceAppWidget() {
@@ -436,10 +435,13 @@ private fun drawSignalBlockResponsive(
     if (sig == null) return
     val isAlert = sig.optBoolean("alert", false)
     val lines = sig.optJSONArray("lines")
-    val rowSize = max(
+    val requestedRowSize = max(
         (short * 0.067f * densityFactor).coerceIn(20f, 38f),
         minimumRowSize
     )
+    // 네 문단 중 가장 긴 문장을 기준으로 전체 블록을 한 번에 축소한다.
+    // 문장별 개별 축소로 폰트·간격 비율이 달라지는 것을 방지한다.
+    val rowSize = fittedSignalBlockRowSize(sig, requestedRowSize, maxWidth, signalStyle)
     val rowCount = if (lines == null) 0 else {
         (0 until min(lines.length(), 2)).count { lines.optJSONArray(it) != null }
     }
@@ -462,47 +464,23 @@ private fun drawSignalBlockResponsive(
                 x,
                 y,
                 rowSize,
-                isAlert,
-                maxWidth
+                isAlert
             )
             y += layout.rowBaselineGap
         }
     }
 
     y = firstBaseline + layout.statusBaselineOffset
-    drawFittedText(
-        canvas,
-        sig.optString("name", "-"),
-        x,
-        y,
-        statusSize,
-        if (isAlert) COLOR_ALERT else COLOR_P2,
-        false,
-        maxWidth
+    drawText(
+        canvas, sig.optString("name", "-"), x, y, statusSize,
+        if (isAlert) COLOR_ALERT else COLOR_P2, false
     )
 
     y = firstBaseline + layout.drawdownBaselineOffset
     if (signalStyle.drawdownBold) {
-        drawFittedText(
-            canvas,
-            drawdownText(sig),
-            x,
-            y,
-            drawdownSize,
-            COLOR_WHITE,
-            true,
-            maxWidth
-        )
+        drawText(canvas, drawdownText(sig), x, y, drawdownSize, COLOR_WHITE, true)
     } else {
-        drawFittedMediumText(
-            canvas,
-            drawdownText(sig),
-            x,
-            y,
-            drawdownSize,
-            COLOR_WHITE,
-            maxWidth
-        )
+        canvas.drawText(drawdownText(sig), x, y, mediumTextPaint(drawdownSize, COLOR_WHITE))
     }
 }
 
@@ -515,8 +493,8 @@ private data class SignalBlockLayout(
 
 /**
  * Scriptable 원본의 세로 스택 비율을 Canvas 기준선으로 변환한다.
- * 두 신호 행은 별도 spacer 없이 이어지고, 상태/낙폭 앞에는 각각
- * SPX 2pt/3pt, QQQ 3pt/4pt 간격이 적용된다.
+ * 두 신호 행은 별도 spacer 없이 이어지고, 상태/낙폭 앞에는 iOS QQQ의
+ * 3pt/4pt 간격이 SPX와 QQQ에 동일하게 적용된다.
  */
 private fun signalBlockLayout(
     rowSize: Float,
@@ -557,6 +535,48 @@ private fun signalBlockLayout(
     )
 }
 
+private fun fittedSignalBlockRowSize(
+    sig: JSONObject,
+    requestedRowSize: Float,
+    maxWidth: Float,
+    signalStyle: SignalStyle
+): Float {
+    if (maxWidth <= 1f || requestedRowSize <= 0f) return requestedRowSize
+    var commonScale = 1f
+    val lines = sig.optJSONArray("lines")
+
+    if (lines != null) {
+        for (i in 0 until min(lines.length(), 2)) {
+            val row = lines.optJSONArray(i) ?: continue
+            val token = row.optString(0)
+            val action = row.optString(1)
+            val text = "$token $action"
+            val width = textPaint(requestedRowSize, COLOR_WHITE, true).measureText(text)
+            if (width > maxWidth && width > 0f) commonScale = min(commonScale, maxWidth / width)
+        }
+    }
+
+    val statusSize = signalStyle.statusPointSize * requestedRowSize / signalStyle.rowPointSize
+    val statusWidth = textPaint(statusSize, COLOR_P2, false)
+        .measureText(sig.optString("name", "-"))
+    if (statusWidth > maxWidth && statusWidth > 0f) {
+        commonScale = min(commonScale, maxWidth / statusWidth)
+    }
+
+    val drawdownSize = signalStyle.drawdownPointSize * requestedRowSize / signalStyle.rowPointSize
+    val drawdownPaint = if (signalStyle.drawdownBold) {
+        textPaint(drawdownSize, COLOR_WHITE, true)
+    } else {
+        mediumTextPaint(drawdownSize, COLOR_WHITE)
+    }
+    val drawdownWidth = drawdownPaint.measureText(drawdownText(sig))
+    if (drawdownWidth > maxWidth && drawdownWidth > 0f) {
+        commonScale = min(commonScale, maxWidth / drawdownWidth)
+    }
+
+    return requestedRowSize * commonScale.coerceIn(0.62f, 1f)
+}
+
 private fun drawSignalRow(
     canvas: Canvas,
     token: String,
@@ -564,10 +584,9 @@ private fun drawSignalRow(
     startX: Float,
     baseline: Float,
     requestedSize: Float,
-    isAlert: Boolean,
-    maxWidth: Float
+    isAlert: Boolean
 ) {
-    val size = fitSignalRowSize(token, action, requestedSize, isAlert, maxWidth)
+    val size = requestedSize
     var x = startX
     val boldPaint = textPaint(size, COLOR_WHITE, true)
 
@@ -590,21 +609,6 @@ private fun drawSignalRow(
     // Scriptable addToken appends exactly one space after the ETF token.
     x += boldPaint.measureText(" ")
     drawText(canvas, action, x, baseline, size, COLOR_WHITE, true)
-}
-
-private fun fitSignalRowSize(
-    token: String,
-    action: String,
-    requestedSize: Float,
-    isAlert: Boolean,
-    maxWidth: Float
-): Float {
-    if (maxWidth <= 1f) return requestedSize
-    val paint = textPaint(requestedSize, COLOR_WHITE, true)
-    val text = if (isAlert) "$token $action" else "$token  $action"
-    val measured = paint.measureText(text)
-    if (measured <= maxWidth) return requestedSize
-    return (requestedSize * maxWidth / measured).coerceAtLeast(requestedSize * 0.64f)
 }
 
 /** FGI도 wide/stacked/tall 세 가지 배치로 재구성한다. */
@@ -656,28 +660,9 @@ private fun fgiCardBitmap(
                 RectF(rightLeft, contentTop, rightRight, gaugeBottom)
             )
 
-            val ratingY = contentTop + (bottom - contentTop) * 0.72f
-            val ratingSize = fittedTextSize(
+            val rawRatingY = contentTop + (bottom - contentTop) * 0.72f
+            val textSizes = fittedFgiTextSizes(
                 rating,
-                withIosWideFontFloor(
-                    (short * 0.059f).coerceIn(22f, 35f), 15f, mode, iosWideScale
-                ),
-                fgiAndroidColor(value),
-                true,
-                rightRight - rightLeft
-            )
-            drawFittedCenteredText(
-                canvas,
-                rating,
-                rightCenter,
-                ratingY,
-                ratingSize,
-                fgiAndroidColor(value),
-                true,
-                rightRight - rightLeft
-            )
-
-            val statsSize = fittedFgiStatsSize(
                 value,
                 avg30,
                 withIosWideFontFloor(
@@ -685,14 +670,20 @@ private fun fgiCardBitmap(
                 ),
                 rightRight - rightLeft
             )
+            val (ratingY, statsY) = fittedFgiBaselines(
+                rawRatingY, textSizes.rating, textSizes.stats, bottom
+            )
+            drawText(
+                canvas, rating, rightCenter, ratingY, textSizes.rating,
+                fgiAndroidColor(value), true, Paint.Align.CENTER
+            )
             drawFgiStats(
                 canvas,
                 value,
                 avg30,
                 rightCenter,
-                min(bottom, fgiStatsBaseline(ratingY, ratingSize, statsSize)),
-                statsSize,
-                rightRight - rightLeft
+                statsY,
+                textSizes.stats
             )
         }
 
@@ -714,38 +705,28 @@ private fun fgiCardBitmap(
             )
 
             val centerX = width / 2f
-            val ratingY = gaugeBottom + short * 0.060f
-            val ratingSize = fittedTextSize(
+            val rawRatingY = gaugeBottom + short * 0.060f
+            val textSizes = fittedFgiTextSizes(
                 rating,
-                (short * 0.055f).coerceIn(20f, 34f),
-                fgiAndroidColor(value),
-                true,
-                width - pad * 2f
-            )
-            drawFittedCenteredText(
-                canvas,
-                rating,
-                centerX,
-                ratingY,
-                ratingSize,
-                fgiAndroidColor(value),
-                true,
-                width - pad * 2f
-            )
-            val statsSize = fittedFgiStatsSize(
                 value,
                 avg30,
                 (short * 0.044f).coerceIn(17f, 28f),
                 width - pad * 2f
+            )
+            val (ratingY, statsY) = fittedFgiBaselines(
+                rawRatingY, textSizes.rating, textSizes.stats, bottom
+            )
+            drawText(
+                canvas, rating, centerX, ratingY, textSizes.rating,
+                fgiAndroidColor(value), true, Paint.Align.CENTER
             )
             drawFgiStats(
                 canvas,
                 value,
                 avg30,
                 centerX,
-                min(bottom, fgiStatsBaseline(ratingY, ratingSize, statsSize)),
-                statsSize,
-                width - pad * 2f
+                statsY,
+                textSizes.stats
             )
         }
 
@@ -767,38 +748,28 @@ private fun fgiCardBitmap(
             )
 
             val centerX = width / 2f
-            val ratingY = gaugeBottom + short * 0.075f
-            val ratingSize = fittedTextSize(
+            val rawRatingY = gaugeBottom + short * 0.075f
+            val textSizes = fittedFgiTextSizes(
                 rating,
-                (short * 0.055f).coerceIn(20f, 34f),
-                fgiAndroidColor(value),
-                true,
-                width - pad * 1.5f
-            )
-            drawFittedCenteredText(
-                canvas,
-                rating,
-                centerX,
-                ratingY,
-                ratingSize,
-                fgiAndroidColor(value),
-                true,
-                width - pad * 1.5f
-            )
-            val statsSize = fittedFgiStatsSize(
                 value,
                 avg30,
                 (short * 0.043f).coerceIn(16f, 27f),
                 width - pad * 1.5f
+            )
+            val (ratingY, statsY) = fittedFgiBaselines(
+                rawRatingY, textSizes.rating, textSizes.stats, bottom
+            )
+            drawText(
+                canvas, rating, centerX, ratingY, textSizes.rating,
+                fgiAndroidColor(value), true, Paint.Align.CENTER
             )
             drawFgiStats(
                 canvas,
                 value,
                 avg30,
                 centerX,
-                min(bottom, fgiStatsBaseline(ratingY, ratingSize, statsSize)),
-                statsSize,
-                width - pad * 1.5f
+                statsY,
+                textSizes.stats
             )
         }
     }
@@ -924,27 +895,34 @@ private fun drawFgiGaugeScriptable(canvas: Canvas, value: Double, area: RectF) {
     )
 }
 
-private fun fittedFgiStatsSize(
+private data class FgiTextSizes(val rating: Float, val stats: Float)
+
+private fun fittedFgiTextSizes(
+    rating: String,
     value: Double,
     avg30: Double,
-    requestedSize: Float,
+    requestedStatsSize: Float,
     maxWidth: Float
-): Float {
+): FgiTextSizes {
     val now = "현재 ${value.roundToInt()}"
     val slash = " / "
     val avg = if (avg30.isFinite()) "30일 평균 ${avg30.roundToInt()}" else "30일 평균 -"
+    val requestedRatingSize = requestedStatsSize * 15f / 13f
+    val requestedSlashSize = requestedStatsSize * 15f / 13f
 
-    fun totalWidth(s: Float): Float =
-        mediumTextPaint(s, fgiAndroidColor(value)).measureText(now) +
-            textPaint(s + 2f, COLOR_WHITE, true).measureText(slash) +
-            mediumTextPaint(s, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2).measureText(avg)
+    val ratingWidth = textPaint(requestedRatingSize, COLOR_WHITE, true).measureText(rating)
+    val statsWidth = mediumTextPaint(requestedStatsSize, fgiAndroidColor(value)).measureText(now) +
+        textPaint(requestedSlashSize, COLOR_WHITE, true).measureText(slash) +
+        mediumTextPaint(
+            requestedStatsSize,
+            if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2
+        ).measureText(avg)
 
-    val initialWidth = totalWidth(requestedSize)
-    return if (initialWidth > maxWidth && initialWidth > 0f) {
-        (requestedSize * maxWidth / initialWidth).coerceAtLeast(requestedSize * 0.65f)
-    } else {
-        requestedSize
-    }
+    var scale = 1f
+    if (ratingWidth > maxWidth && ratingWidth > 0f) scale = min(scale, maxWidth / ratingWidth)
+    if (statsWidth > maxWidth && statsWidth > 0f) scale = min(scale, maxWidth / statsWidth)
+    scale = scale.coerceIn(0.62f, 1f)
+    return FgiTextSizes(requestedRatingSize * scale, requestedStatsSize * scale)
 }
 
 /** iOS Large FGI의 등급 15pt → spacer 3pt → 통계 행 구조를 비례 적용한다. */
@@ -956,10 +934,25 @@ private fun fgiStatsBaseline(
     val ratingBottom = textPaint(ratingSize, COLOR_WHITE, true).fontMetrics.bottom
     val statsTop = min(
         mediumTextPaint(statsSize, COLOR_WHITE).fontMetrics.top,
-        textPaint(statsSize + 2f, COLOR_WHITE, true).fontMetrics.top
+        textPaint(statsSize * 15f / 13f, COLOR_WHITE, true).fontMetrics.top
     )
     val spacer = 3f * (statsSize / 13f)
     return ratingBaseline + ratingBottom + spacer - statsTop
+}
+
+private fun fittedFgiBaselines(
+    requestedRatingBaseline: Float,
+    ratingSize: Float,
+    statsSize: Float,
+    bottom: Float
+): Pair<Float, Float> {
+    val requestedStatsBaseline = fgiStatsBaseline(requestedRatingBaseline, ratingSize, statsSize)
+    val statsBottom = max(
+        mediumTextPaint(statsSize, COLOR_WHITE).fontMetrics.bottom,
+        textPaint(statsSize * 15f / 13f, COLOR_WHITE, true).fontMetrics.bottom
+    )
+    val upwardShift = max(0f, requestedStatsBaseline + statsBottom - bottom)
+    return (requestedRatingBaseline - upwardShift) to (requestedStatsBaseline - upwardShift)
 }
 
 private fun drawFgiStats(
@@ -968,16 +961,13 @@ private fun drawFgiStats(
     avg30: Double,
     centerX: Float,
     baseline: Float,
-    requestedSize: Float,
-    maxWidth: Float
+    size: Float
 ) {
     val now = "현재 ${value.roundToInt()}"
     val slash = " / "
     val avg = if (avg30.isFinite()) "30일 평균 ${avg30.roundToInt()}" else "30일 평균 -"
-    val size = fittedFgiStatsSize(value, avg30, requestedSize, maxWidth)
-
     val nowPaint = mediumTextPaint(size, fgiAndroidColor(value))
-    val slashPaint = textPaint(size + 2f, COLOR_WHITE, true)
+    val slashPaint = textPaint(size * 15f / 13f, COLOR_WHITE, true)
     val avgPaint = mediumTextPaint(size, if (avg30.isFinite()) fgiAndroidColor(avg30) else COLOR_P2)
     val total = nowPaint.measureText(now) + slashPaint.measureText(slash) + avgPaint.measureText(avg)
     var x = centerX - total / 2f
@@ -1021,69 +1011,6 @@ private fun withIosWideFontFloor(
 private fun wideFontStretch(width: Int, height: Int): Float {
     val aspect = width.toFloat() / height.coerceAtLeast(1)
     return sqrt(max(1f, aspect / 1.60f)).coerceAtMost(1.20f)
-}
-
-private fun drawFittedText(
-    canvas: Canvas,
-    text: String,
-    x: Float,
-    y: Float,
-    requestedSize: Float,
-    color: Int,
-    bold: Boolean,
-    maxWidth: Float
-) {
-    var size = requestedSize
-    val measured = textPaint(size, color, bold).measureText(text)
-    if (measured > maxWidth && measured > 0f) {
-        size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
-    }
-    drawText(canvas, text, x, y, size, color, bold)
-}
-
-private fun drawFittedMediumText(
-    canvas: Canvas,
-    text: String,
-    x: Float,
-    y: Float,
-    requestedSize: Float,
-    color: Int,
-    maxWidth: Float
-) {
-    var size = requestedSize
-    val measured = mediumTextPaint(size, color).measureText(text)
-    if (measured > maxWidth && measured > 0f) {
-        size = (size * maxWidth / measured).coerceAtLeast(size * 0.62f)
-    }
-    canvas.drawText(text, x, y, mediumTextPaint(size, color))
-}
-
-private fun drawFittedCenteredText(
-    canvas: Canvas,
-    text: String,
-    centerX: Float,
-    y: Float,
-    requestedSize: Float,
-    color: Int,
-    bold: Boolean,
-    maxWidth: Float
-) {
-    val size = fittedTextSize(text, requestedSize, color, bold, maxWidth)
-    drawText(canvas, text, centerX, y, size, color, bold, Paint.Align.CENTER)
-}
-
-private fun fittedTextSize(
-    text: String,
-    requestedSize: Float,
-    color: Int,
-    bold: Boolean,
-    maxWidth: Float
-): Float {
-    val measured = textPaint(requestedSize, color, bold).measureText(text)
-    if (measured > maxWidth && measured > 0f) {
-        return (requestedSize * maxWidth / measured).coerceAtLeast(requestedSize * 0.62f)
-    }
-    return requestedSize
 }
 
 private fun drawText(

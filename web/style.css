@@ -117,9 +117,10 @@ canvas{display:block;max-width:100%}
 
 #spx-info,
 #qqq-info{
+  /* iOS QQQ 원본의 15:11:11 폰트 비율을 모든 화면 폭에서 유지한다. */
   --signal-size:clamp(17px,2.65vw,31px);
-  --status-size:clamp(12.143px,1.893vw,22.143px);
-  --drawdown-size:clamp(13.357px,2.082vw,24.357px);
+  --status-size:clamp(12.4667px,1.9433vw,22.7333px);
+  --drawdown-size:clamp(12.4667px,1.9433vw,22.7333px);
 }
 
 .sig-row{
@@ -181,7 +182,7 @@ canvas{display:block;max-width:100%}
 }
 .fgi-rating{
   margin-top:.133333em;
-  font-size:clamp(17px,2.5vw,30px);
+  font-size:clamp(16.1538px,2.3077vw,27.6923px);
   line-height:1.2;
   font-weight:700;
   white-space:nowrap;
@@ -197,7 +198,7 @@ canvas{display:block;max-width:100%}
   font-weight:600;
   white-space:nowrap;
 }
-.fgi-slash{color:#fff;font-weight:700}
+.fgi-slash{color:#fff;font-size:1.153846em;font-weight:700}
 
 .error-text{
   min-height:1.2em;
@@ -222,10 +223,10 @@ canvas{display:block;max-width:100%}
   #spx-info,
   #qqq-info{
     --signal-size:clamp(12px,3.65vw,17px);
-    --status-size:clamp(8.571px,2.607vw,12.143px);
-    --drawdown-size:clamp(9.429px,2.868vw,13.357px);
+    --status-size:clamp(8.8px,2.6767vw,12.4667px);
+    --drawdown-size:clamp(8.8px,2.6767vw,12.4667px);
   }
-  .fgi-rating{font-size:clamp(12px,3.6vw,17px)}
+  .fgi-rating{font-size:clamp(11.5385px,3.3462vw,16.1538px)}
   .fgi-stats{font-size:clamp(10px,2.9vw,14px);gap:3px}
   .fgi-info-box canvas{width:100%}
 }
