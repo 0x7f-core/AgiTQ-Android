@@ -155,11 +155,11 @@ canvas{display:block;max-width:100%}
   white-space:nowrap;
 }
 
-/* 웹은 가독성이 좋은 SPX의 2pt/3pt 문단 간격으로 통일한다. */
+/* iOS QQQ 원본: 상태/낙폭 글자 11pt 앞에 각각 3pt/4pt 간격. */
 #spx-info .status-text,
-#qqq-info .status-text{margin-top:.2em}
+#qqq-info .status-text{margin-top:.272727em}
 #spx-info .dd-text,
-#qqq-info .dd-text{margin-top:.272727em}
+#qqq-info .dd-text{margin-top:.363636em}
 
 .fgi-card{padding-top:20px}
 .fgi-row{padding-top:8px}
