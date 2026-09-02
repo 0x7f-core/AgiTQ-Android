@@ -3,8 +3,8 @@ package com.agitq.android
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import androidx.glance.appwidget.AppWidgetId
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 
 /** 한 번의 API 응답으로 설치된 세 위젯을 같은 시점의 데이터로 갱신한다. */
 object WidgetRefreshCoordinator {
@@ -41,9 +41,10 @@ object WidgetRefreshCoordinator {
         receiverClass: Class<*>
     ) {
         val manager = AppWidgetManager.getInstance(context)
+        val glanceManager = GlanceAppWidgetManager(context)
         val component = ComponentName(context, receiverClass)
         manager.getAppWidgetIds(component).forEach { appWidgetId ->
-            widget.update(context, AppWidgetId(appWidgetId))
+            widget.update(context, glanceManager.getGlanceIdBy(appWidgetId))
         }
     }
 }
