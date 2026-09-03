@@ -2,10 +2,21 @@ package com.agitq.android
 
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MarketSnapshotRepositoryTest {
+    @Test
+    fun distinguishesWorkerStaleFallbackFromFreshSnapshot() {
+        assertFalse(MarketSnapshotRepository.isStaleFallback(validSnapshot()))
+
+        val stale = validSnapshot()
+            .put("cache", JSONObject().put("stale", true).put("reason", "offline"))
+        assertTrue(MarketSnapshotRepository.isStaleFallback(stale))
+    }
+
     @Test
     fun acceptsCompleteSnapshotWithUnavailableFgi() {
         MarketSnapshotRepository.requireValidSnapshot(validSnapshot())
