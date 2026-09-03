@@ -12,8 +12,10 @@ android {
         applicationId = "com.agitq.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 39
-        versionName = "4.39"
+        // 첫 공개 배포 버전. versionCode는 테스트판(39)보다 높게 유지해
+        // 기존 설치 사용자가 삭제 없이 v1.0으로 업데이트할 수 있게 한다.
+        versionCode = 40
+        versionName = "1.0"
     }
 
     signingConfigs {
