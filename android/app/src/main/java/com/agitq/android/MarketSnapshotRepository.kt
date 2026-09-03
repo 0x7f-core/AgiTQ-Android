@@ -25,7 +25,8 @@ object MarketSnapshotRepository {
 
     data class RefreshResult(
         val data: JSONObject?,
-        val isFresh: Boolean
+        val isFresh: Boolean,
+        val shouldRender: Boolean = isFresh
     )
 
     suspend fun cachedOrRefresh(context: Context): JSONObject? = withContext(Dispatchers.IO) {
@@ -43,16 +44,37 @@ object MarketSnapshotRepository {
         return try {
             val fresh = AgiTQApi.load(forceRefresh)
             requireValidSnapshot(fresh)
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(SNAPSHOT_JSON, fresh.toString())
-                .apply()
-            memorySnapshot = fresh
+
+            // Worker 전체 upstream 장애 시 HTTP 200과 마지막 정상 스냅샷을 함께
+            // 반환한다. 화면에는 사용할 수 있지만 새 데이터나 종가 동기화 완료로
+            // 간주하면 안 된다.
+            if (isStaleFallback(fresh)) {
+                val cached = readCached(context)
+                if (cached != null) return RefreshResult(cached, isFresh = false)
+
+                // 최초 설치처럼 로컬 캐시가 없을 때만 fallback을 보존해 표시한다.
+                // 자동 Worker는 isFresh=false를 보고 재시도한다.
+                persist(context, fresh)
+                return RefreshResult(fresh, isFresh = false, shouldRender = true)
+            }
+
+            persist(context, fresh)
             RefreshResult(fresh, true)
         } catch (_: Exception) {
             RefreshResult(readCached(context), false)
         }
     }
+
+    private fun persist(context: Context, snapshot: JSONObject) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SNAPSHOT_JSON, snapshot.toString())
+            .apply()
+        memorySnapshot = snapshot
+    }
+
+    internal fun isStaleFallback(root: JSONObject): Boolean =
+        root.optJSONObject("cache")?.optBoolean("stale", false) == true
 
     private fun readCached(context: Context): JSONObject? {
         memorySnapshot?.let { return it }
