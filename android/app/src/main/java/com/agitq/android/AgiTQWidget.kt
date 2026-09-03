@@ -59,9 +59,14 @@ private val COLOR_CP = AndroidColor.rgb(128, 223, 255)
 private val COLOR_UPPER = AndroidColor.rgb(224, 112, 192)
 private val COLOR_LOWER = AndroidColor.rgb(175, 212, 133)
 private val COLOR_ALERT = AndroidColor.rgb(255, 77, 77)
+private val COLOR_FGI_FEAR = AndroidColor.rgb(240, 160, 160)
 private val TYPEFACE_NORMAL = Typeface.create("sans-serif", Typeface.NORMAL)
 private val TYPEFACE_BOLD = Typeface.create("sans-serif", Typeface.BOLD)
 private val TYPEFACE_MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+private val KOREA_ZONE = ZoneId.of("Asia/Seoul")
+private val MARKET_TIME_FORMATTER = DateTimeFormatter
+    .ofPattern("yy.MM.dd. HH:mm '기준'", Locale.KOREA)
+    .withZone(KOREA_ZONE)
 
 private enum class CardKind { SPX, QQQ, FGI }
 private enum class LayoutMode { WIDE, STACKED, TALL }
@@ -72,13 +77,11 @@ private data class SignalStyle(
     val statusPointSize: Float,
     val drawdownPointSize: Float,
     val statusSpacerPointSize: Float,
-    val drawdownSpacerPointSize: Float,
-    val drawdownBold: Boolean
+    val drawdownSpacerPointSize: Float
 )
 
 // Android 위젯은 iOS QQQ의 글자 크기·굵기·문단 간격을 단일 기준으로 사용한다.
-private val SPX_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
-private val QQQ_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f, true)
+private val MARKET_SIGNAL_STYLE = SignalStyle(15f, 11f, 11f, 3f, 4f)
 
 class SpxWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -160,13 +163,13 @@ private fun ResponsiveFullCard(
     val bitmap = when (kind) {
         CardKind.SPX -> data?.optJSONObject("SPX")?.let {
             marketCardBitmap(
-                it, "아기티큐 200슨피단 (SPX)", 0.025, SPX_SIGNAL_STYLE,
+                it, "아기티큐 200슨피단 (SPX)", 0.025, MARKET_SIGNAL_STYLE,
                 bitmapW, bitmapH, canvasUnitsPerDp
             )
         }
         CardKind.QQQ -> data?.optJSONObject("QQQ")?.let {
             marketCardBitmap(
-                it, "아기티큐 200큐큐단 (QQQ)", 0.02, QQQ_SIGNAL_STYLE,
+                it, "아기티큐 200큐큐단 (QQQ)", 0.02, MARKET_SIGNAL_STYLE,
                 bitmapW, bitmapH, canvasUnitsPerDp
             )
         }
@@ -351,50 +354,63 @@ private fun marketCardBitmap(
 /** 원본 Scriptable drawBandChart의 색/형태를 유지하면서 주어진 영역 비율에 맞춰 다시 계산. */
 private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct: Double, area: RectF) {
     val arr = asset.optJSONArray("closes") ?: return
-    val closes = ArrayList<Double>(arr.length())
+    val closes = DoubleArray(arr.length())
+    var closeCount = 0
     for (i in 0 until arr.length()) {
         val v = arr.optDouble(i, Double.NaN)
-        if (v.isFinite() && v > 0.0) closes += v
+        if (v.isFinite() && v > 0.0) closes[closeCount++] = v
     }
-    if (closes.size < 200) return
+    if (closeCount < 200) return
 
-    val sma = arrayOfNulls<Double>(closes.size)
+    val start = max(0, closeCount - 90)
+    val pointCount = closeCount - start
+    val prices = DoubleArray(pointCount)
+    val upper = DoubleArray(pointCount) { Double.NaN }
+    val lower = DoubleArray(pointCount) { Double.NaN }
     var rolling = 0.0
-    for (i in closes.indices) {
+    var minV = Double.POSITIVE_INFINITY
+    var maxV = Double.NEGATIVE_INFINITY
+    for (i in 0 until closeCount) {
         rolling += closes[i]
         if (i >= 200) rolling -= closes[i - 200]
-        if (i >= 199) sma[i] = rolling / 200.0
+        if (i < start) continue
+
+        val index = i - start
+        val price = closes[i]
+        prices[index] = price
+        minV = min(minV, price)
+        maxV = max(maxV, price)
+        if (i >= 199) {
+            val average = rolling / 200.0
+            upper[index] = average * (1.0 + bandPct)
+            lower[index] = average * (1.0 - bandPct)
+            minV = min(minV, lower[index])
+            maxV = max(maxV, upper[index])
+        }
     }
 
-    val start = max(0, closes.size - 90)
-    val prices = closes.subList(start, closes.size)
-    val upper = (start until closes.size).map { sma[it]?.times(1.0 + bandPct) }
-    val lower = (start until closes.size).map { sma[it]?.times(1.0 - bandPct) }
-
-    val all = mutableListOf<Double>()
-    all += prices
-    upper.filterNotNullTo(all)
-    lower.filterNotNullTo(all)
-    if (all.isEmpty()) return
-
-    val minV = all.minOrNull() ?: return
-    var maxV = all.maxOrNull() ?: return
     if (maxV <= minV) maxV = minV + 1.0
 
     val padX = area.width() * 0.03f
     val padY = area.height() * 0.05f
     val plot = RectF(area.left + padX, area.top + padY, area.right - padX, area.bottom - padY)
 
-    fun x(i: Int): Float = plot.left + if (prices.size <= 1) 0f else i.toFloat() / (prices.size - 1) * plot.width()
+    fun x(i: Int): Float = plot.left + i.toFloat() / (pointCount - 1) * plot.width()
     fun y(v: Double): Float = plot.bottom - ((v - minV) / (maxV - minV) * plot.height()).toFloat()
 
     val lineScale = min(area.width() / 500f, area.height() / 300f).coerceIn(0.55f, 1.65f)
+    val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
 
-    fun series(data: List<Double?>, color: Int, widthPx: Float) {
+    fun series(data: DoubleArray, color: Int, widthPx: Float) {
         val path = Path()
         var started = false
-        data.forEachIndexed { i, v ->
-            if (v == null || !v.isFinite()) {
+        for (i in data.indices) {
+            val v = data[i]
+            if (!v.isFinite()) {
                 started = false
             } else {
                 val px = x(i)
@@ -407,19 +423,15 @@ private fun drawMarketChartScriptable(canvas: Canvas, asset: JSONObject, bandPct
                 }
             }
         }
-        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = color
-            style = Paint.Style.STROKE
-            strokeWidth = widthPx * lineScale
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        })
+        linePaint.color = color
+        linePaint.strokeWidth = widthPx * lineScale
+        canvas.drawPath(path, linePaint)
     }
 
     // Scriptable drawBandChart: upper/lower 3px, current price 5px.
     series(upper, COLOR_UPPER, 3f)
     series(lower, COLOR_LOWER, 3f)
-    series(prices.map { it }, COLOR_CP, 5f)
+    series(prices, COLOR_CP, 5f)
 }
 
 private fun drawSignalBlockResponsive(
@@ -479,11 +491,7 @@ private fun drawSignalBlockResponsive(
     )
 
     y = firstBaseline + layout.drawdownBaselineOffset
-    if (signalStyle.drawdownBold) {
-        drawText(canvas, drawdownText(sig), x, y, drawdownSize, COLOR_WHITE, true)
-    } else {
-        canvas.drawText(drawdownText(sig), x, y, mediumTextPaint(drawdownSize, COLOR_WHITE))
-    }
+    drawText(canvas, drawdownText(sig), x, y, drawdownSize, COLOR_WHITE, true)
 }
 
 private data class SignalBlockLayout(
@@ -508,11 +516,7 @@ private fun signalBlockLayout(
     val drawdownSize = signalStyle.drawdownPointSize * pointScale
     val rowMetrics = textPaint(rowSize, COLOR_WHITE, true).fontMetrics
     val statusMetrics = textPaint(statusSize, COLOR_P2, false).fontMetrics
-    val drawdownMetrics = if (signalStyle.drawdownBold) {
-        textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics
-    } else {
-        mediumTextPaint(drawdownSize, COLOR_WHITE).fontMetrics
-    }
+    val drawdownMetrics = textPaint(drawdownSize, COLOR_WHITE, true).fontMetrics
 
     val statusSpacer = signalStyle.statusSpacerPointSize * pointScale
     val drawdownSpacer = signalStyle.drawdownSpacerPointSize * pointScale
@@ -567,11 +571,7 @@ private fun fittedSignalBlockRowSize(
     }
 
     val drawdownSize = signalStyle.drawdownPointSize * requestedRowSize / signalStyle.rowPointSize
-    val drawdownPaint = if (signalStyle.drawdownBold) {
-        textPaint(drawdownSize, COLOR_WHITE, true)
-    } else {
-        mediumTextPaint(drawdownSize, COLOR_WHITE)
-    }
+    val drawdownPaint = textPaint(drawdownSize, COLOR_WHITE, true)
     val drawdownWidth = drawdownPaint.measureText(drawdownText(sig))
     if (drawdownWidth > maxWidth && drawdownWidth > 0f) {
         commonScale = min(commonScale, maxWidth / drawdownWidth)
@@ -586,10 +586,9 @@ private fun drawSignalRow(
     action: String,
     startX: Float,
     baseline: Float,
-    requestedSize: Float,
+    size: Float,
     isAlert: Boolean
 ) {
-    val size = requestedSize
     var x = startX
     val boldPaint = textPaint(size, COLOR_WHITE, true)
 
@@ -674,10 +673,8 @@ private fun fgiCardBitmap(
                 rightRight - rightLeft,
                 bottom - gaugeBottom
             )
-            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
-            val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats
-            )
+            val ratingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
+            val statsY = fgiStatsBaseline(ratingY, textSizes.rating, textSizes.stats)
             drawText(
                 canvas, rating, rightCenter, ratingY, textSizes.rating,
                 fgiAndroidColor(value), true, Paint.Align.CENTER
@@ -718,10 +715,8 @@ private fun fgiCardBitmap(
                 width - pad * 2f,
                 bottom - gaugeBottom
             )
-            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
-            val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats
-            )
+            val ratingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
+            val statsY = fgiStatsBaseline(ratingY, textSizes.rating, textSizes.stats)
             drawText(
                 canvas, rating, centerX, ratingY, textSizes.rating,
                 fgiAndroidColor(value), true, Paint.Align.CENTER
@@ -762,10 +757,8 @@ private fun fgiCardBitmap(
                 width - pad * 1.5f,
                 bottom - gaugeBottom
             )
-            val rawRatingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
-            val (ratingY, statsY) = fittedFgiBaselines(
-                rawRatingY, textSizes.rating, textSizes.stats
-            )
+            val ratingY = fgiRatingBaseline(gaugeBottom, textSizes.rating)
+            val statsY = fgiStatsBaseline(ratingY, textSizes.rating, textSizes.stats)
             drawText(
                 canvas, rating, centerX, ratingY, textSizes.rating,
                 fgiAndroidColor(value), true, Paint.Align.CENTER
@@ -788,13 +781,14 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     val arr = fgi.optJSONArray("history") ?: return
     if (arr.length() < 2) return
 
-    val values = mutableListOf<Double>()
     val start = max(0, arr.length() - 90)
+    val values = DoubleArray(arr.length() - start)
+    var valueCount = 0
     for (i in start until arr.length()) {
         val v = arr.optJSONObject(i)?.optDouble("y", Double.NaN) ?: Double.NaN
-        if (v.isFinite()) values += v.coerceIn(0.0, 100.0)
+        if (v.isFinite()) values[valueCount++] = v.coerceIn(0.0, 100.0)
     }
-    if (values.size < 2) return
+    if (valueCount < 2) return
 
     val padL = area.width() * (8f / 480f)
     val padR = area.width() * (8f / 480f)
@@ -802,7 +796,7 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     val padB = area.height() * (12f / 300f)
     val plot = RectF(area.left + padL, area.top + padT, area.right - padR, area.bottom - padB)
 
-    fun toX(i: Int): Float = plot.left + i.toFloat() / (values.size - 1) * plot.width()
+    fun toX(i: Int): Float = plot.left + i.toFloat() / (valueCount - 1) * plot.width()
     fun toY(v: Double): Float = plot.top + ((100.0 - v) / 100.0 * plot.height()).toFloat()
 
     val scale = min(area.width() / 480f, area.height() / 300f).coerceIn(0.55f, 1.8f)
@@ -810,13 +804,14 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
         color = AndroidColor.argb(51, 170, 170, 170)
         strokeWidth = 1f * scale
     }
-    listOf(25.0, 50.0, 75.0).forEach { level ->
-        val y = toY(level)
+    for (level in 25..75 step 25) {
+        val y = toY(level.toDouble())
         canvas.drawLine(plot.left, y, plot.right, y, gridPaint)
     }
 
     val path = Path()
-    values.forEachIndexed { i, v ->
+    for (i in 0 until valueCount) {
+        val v = values[i]
         val x = toX(i)
         val y = toY(v)
         if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
@@ -830,7 +825,8 @@ private fun drawFgiHistoryScriptable(canvas: Canvas, fgi: JSONObject, area: Rect
     })
 
     val pointPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    values.forEachIndexed { i, v ->
+    for (i in 0 until valueCount) {
+        val v = values[i]
         pointPaint.color = fgiAndroidColor(v)
         canvas.drawCircle(
             toX(i),
@@ -967,15 +963,6 @@ private fun fgiStatsBaseline(
     return ratingBaseline + ratingBottom + spacer - statsTop
 }
 
-private fun fittedFgiBaselines(
-    requestedRatingBaseline: Float,
-    ratingSize: Float,
-    statsSize: Float
-): Pair<Float, Float> {
-    val requestedStatsBaseline = fgiStatsBaseline(requestedRatingBaseline, ratingSize, statsSize)
-    return requestedRatingBaseline to requestedStatsBaseline
-}
-
 private fun drawFgiStats(
     canvas: Canvas,
     value: Double,
@@ -1085,10 +1072,7 @@ private fun drawdownText(sig: JSONObject?): String {
 private fun formatMarketTime(epochSeconds: Long): String {
     if (epochSeconds <= 0L) return "-"
     return runCatching {
-        DateTimeFormatter
-            .ofPattern("yy.MM.dd. HH:mm '기준'", Locale.KOREA)
-            .withZone(ZoneId.of("Asia/Seoul"))
-            .format(Instant.ofEpochSecond(epochSeconds))
+        MARKET_TIME_FORMATTER.format(Instant.ofEpochSecond(epochSeconds))
     }.getOrDefault("-")
 }
 
@@ -1109,9 +1093,9 @@ private fun fgiRatingFull(rating: String): String = when (rating.lowercase()) {
 }
 
 private fun fgiAndroidColor(value: Double): Int = when {
-    value >= 75 -> AndroidColor.rgb(176, 124, 192)
-    value >= 55 -> AndroidColor.rgb(91, 184, 232)
-    value >= 45 -> AndroidColor.rgb(170, 170, 170)
-    value >= 25 -> AndroidColor.rgb(240, 160, 160)
-    else -> AndroidColor.rgb(232, 113, 79)
+    value >= 75 -> COLOR_SPYM
+    value >= 55 -> COLOR_SGOV
+    value >= 45 -> COLOR_P2
+    value >= 25 -> COLOR_FGI_FEAR
+    else -> COLOR_TQQQ
 }

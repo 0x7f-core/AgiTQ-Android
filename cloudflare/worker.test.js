@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import worker, { alignForSignal, analyzeSignal, marketDateKey, sma } from './worker.js';
+import worker, { alignForSignal, analyzeSignal, marketDateKey } from './worker.js';
 
 class MemoryCache {
   constructor() {
@@ -122,7 +122,7 @@ test('market response is cached and last-good data survives an upstream outage',
   await Promise.all(pending);
 
   assert.equal(first.status, 200);
-  assert.equal(firstData.version, 'v4.29');
+  assert.equal(firstData.version, 'v4.38');
   assert.equal(firstData.SPX.closes.length, 260);
   assert.equal(firstData.FGI.available, true);
   assert.equal(upstreamCalls, 4);
@@ -147,6 +147,28 @@ test('market response is cached and last-good data survives an upstream outage',
   assert.equal(upstreamCalls, 8);
 
   cache.entries.delete('https://example.test/__agitq_cache/market-fresh');
+  const partialPending = [];
+  globalThis.fetch = async url => {
+    upstreamCalls++;
+    const value = String(url);
+    if (value.includes('fearandgreed')) throw new Error('CNN offline');
+    if (value.includes('TQQQ')) return Response.json(yahooPayload(40));
+    if (value.includes('QQQ')) return Response.json(yahooPayload(300));
+    return Response.json(yahooPayload(4_000));
+  };
+  const partial = await worker.fetch(
+    request,
+    {},
+    { waitUntil: promise => partialPending.push(promise) },
+  );
+  const partialData = await partial.json();
+  await Promise.all(partialPending);
+  assert.equal(partial.status, 200);
+  assert.equal(partialData.FGI.available, true);
+  assert.equal(partialData.FGI.value, firstData.FGI.value);
+  assert.match(partialData.FGI.error, /CNN offline/);
+
+  cache.entries.delete('https://example.test/__agitq_cache/market-fresh');
   globalThis.fetch = async () => { throw new Error('offline'); };
 
   const stale = await worker.fetch(request, {}, { waitUntil() {} });
@@ -155,10 +177,6 @@ test('market response is cached and last-good data survives an upstream outage',
   assert.equal(stale.headers.get('X-AgiTQ-Cache'), 'stale');
   assert.equal(staleData.cache.stale, true);
   assert.equal(staleData.SPX.price, firstData.SPX.price);
-});
-
-test('rolling SMA preserves the Scriptable result', () => {
-  assert.deepEqual(sma([1, 2, 3, 4, 5], 3), [null, null, 2, 3, 4]);
 });
 
 test('signal histories align by New York trading date, not quote second', () => {
@@ -192,6 +210,8 @@ test('SPX multi and QQQ single strategies match the Scriptable state machine', (
       strategy.band,
       strategy.band,
     );
+    const expectedSma = closes.slice(-200).reduce((sum, value) => sum + value, 0) / 200;
+    assert.equal(actual.sma, expectedSma);
     assert.deepEqual(
       { ...actual, sma: undefined },
       { ...expected, sma: undefined },

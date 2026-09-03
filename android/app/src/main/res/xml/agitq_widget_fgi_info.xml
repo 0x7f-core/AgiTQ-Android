@@ -7,4 +7,4 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/agitq_widget_fgi_description"
-    android:initialLayout="@layout/agitq_widget_fgi_placeholder" />
+    android:initialLayout="@layout/agitq_widget_placeholder" />

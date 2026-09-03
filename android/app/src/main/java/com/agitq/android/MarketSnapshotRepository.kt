@@ -18,15 +18,14 @@ import org.json.JSONObject
 object MarketSnapshotRepository {
     private const val PREFS_NAME = "agitq_market_snapshot"
     private const val SNAPSHOT_JSON = "snapshot_json"
-    private const val FETCHED_AT = "fetched_at"
 
     private val refreshMutex = Mutex()
+    private val memoryLock = Any()
+    @Volatile private var memorySnapshot: JSONObject? = null
 
     data class RefreshResult(
         val data: JSONObject?,
-        val isFresh: Boolean,
-        val fetchedAt: Long,
-        val error: Throwable? = null
+        val isFresh: Boolean
     )
 
     suspend fun cachedOrRefresh(context: Context): JSONObject? = withContext(Dispatchers.IO) {
@@ -40,34 +39,33 @@ object MarketSnapshotRepository {
         refreshMutex.withLock { fetchAndPersist(context, forceRefresh = true) }
     }
 
-    fun cached(context: Context): JSONObject? = readCached(context)
-
     private fun fetchAndPersist(context: Context, forceRefresh: Boolean): RefreshResult {
         return try {
             val fresh = AgiTQApi.load(forceRefresh)
             requireValidSnapshot(fresh)
-            val fetchedAt = System.currentTimeMillis()
-            val serialized = fresh.toString()
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
-                .putString(SNAPSHOT_JSON, serialized)
-                .putLong(FETCHED_AT, fetchedAt)
+                .putString(SNAPSHOT_JSON, fresh.toString())
                 .apply()
-            RefreshResult(fresh, true, fetchedAt)
-        } catch (error: Exception) {
-            val cached = readCached(context)
-            val fetchedAt = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getLong(FETCHED_AT, 0L)
-            RefreshResult(cached, false, fetchedAt, error)
+            memorySnapshot = fresh
+            RefreshResult(fresh, true)
+        } catch (_: Exception) {
+            RefreshResult(readCached(context), false)
         }
     }
 
     private fun readCached(context: Context): JSONObject? {
-        val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(SNAPSHOT_JSON, null) ?: return null
-        return runCatching {
-            JSONObject(raw).also(::requireValidSnapshot)
-        }.getOrNull()
+        memorySnapshot?.let { return it }
+        return synchronized(memoryLock) {
+            memorySnapshot ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(SNAPSHOT_JSON, null)
+                ?.let { raw ->
+                    runCatching {
+                        JSONObject(raw).also(::requireValidSnapshot)
+                    }.getOrNull()
+                }
+                ?.also { memorySnapshot = it }
+        }
     }
 
     internal fun requireValidSnapshot(root: JSONObject) {

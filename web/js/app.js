@@ -1,10 +1,6 @@
 const C = {
   p1: '#FFFFFF',
   p2: '#AAAAAA',
-  dot: '#666666',
-  tqqq: '#e8714f',
-  spym: '#b07cc0',
-  sgov: '#5bb8e8',
   cp: '#80dfff',
   upperBand: '#e070c0',
   lowerBand: '#afd485',
@@ -16,29 +12,37 @@ const C = {
   extremeGreed: '#b07cc0'
 };
 
+const KST_DATE_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Seoul',
+  year: '2-digit', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+});
+
+const RATING_LABELS = {
+  'extreme fear': '극공포 (Extreme Fear)',
+  'fear': '공포 (Fear)',
+  'neutral': '중립 (Neutral)',
+  'greed': '탐욕 (Greed)',
+  'extreme greed': '극탐욕 (Extreme Greed)'
+};
+
 function getHDContext(canvasId, W, H) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  canvas.width = Math.round(W * dpr);
-  canvas.height = Math.round(H * dpr);
-  canvas.style.aspectRatio = `${W}/${H}`;
+  const pixelWidth = Math.round(W * dpr);
+  const pixelHeight = Math.round(H * dpr);
+  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+  const aspectRatio = `${W}/${H}`;
+  if (canvas.style.aspectRatio !== aspectRatio) canvas.style.aspectRatio = aspectRatio;
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   return ctx;
-}
-
-function sma(data, period) {
-  const out = new Array(data.length).fill(NaN);
-  let sum = 0;
-  for (let i = 0; i < data.length; i++) {
-    sum += Number(data[i]);
-    if (i >= period) sum -= Number(data[i - period]);
-    if (i >= period - 1) out[i] = sum / period;
-  }
-  return out;
 }
 
 function etfClass(token) {
@@ -66,25 +70,15 @@ function fgiColor(v) {
 }
 
 function translateRating(rating) {
-  const map = {
-    'extreme fear': '극공포 (Extreme Fear)',
-    'fear': '공포 (Fear)',
-    'neutral': '중립 (Neutral)',
-    'greed': '탐욕 (Greed)',
-    'extreme greed': '극탐욕 (Extreme Greed)'
-  };
-  return map[String(rating || '').toLowerCase()] || rating || '-';
+  return RATING_LABELS[String(rating || '').toLowerCase()] || rating || '-';
 }
 
 function formatMarketTime(epochSeconds) {
   if (!epochSeconds) return '-';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul',
-    year: '2-digit', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-  }).formatToParts(new Date(Number(epochSeconds) * 1000));
-  const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-  return `${obj.year}.${obj.month}.${obj.day}. ${obj.hour}:${obj.minute} 기준`;
+  const parts = KST_DATE_TIME.formatToParts(new Date(Number(epochSeconds) * 1000));
+  const values = {};
+  for (const part of parts) values[part.type] = part.value;
+  return `${values.year}.${values.month}.${values.day}. ${values.hour}:${values.minute} 기준`;
 }
 
 // Original Scriptable drawBandChart: 90 points, upper/lower band and current price only.
@@ -93,37 +87,52 @@ function drawBandChart(canvasId, closes, upB, dnB) {
   const ctx = getHDContext(canvasId, W, H);
   if (!ctx || !Array.isArray(closes) || closes.length < 200) return;
 
-  const moving = sma(closes, 200);
   const SIZE = Math.min(90, closes.length);
-  const pSet = closes.slice(-SIZE).map(Number);
-  const sSet = moving.slice(-SIZE);
-  const uSet = sSet.map(v => Number.isFinite(v) ? v * (1 + upB) : NaN);
-  const lSet = sSet.map(v => Number.isFinite(v) ? v * (1 - dnB) : NaN);
+  const start = closes.length - SIZE;
+  const pSet = new Array(SIZE);
+  const uSet = new Array(SIZE).fill(NaN);
+  const lSet = new Array(SIZE).fill(NaN);
+  let rolling = 0;
+  let min = Infinity;
+  let max = -Infinity;
 
-  const all = pSet.concat(uSet, lSet).filter(Number.isFinite);
-  if (!all.length) return;
-  const min = Math.min(...all);
-  const max = Math.max(...all);
+  for (let i = 0; i < closes.length; i++) {
+    const price = Number(closes[i]);
+    rolling += price;
+    if (i >= 200) rolling -= Number(closes[i - 200]);
+    if (i < start) continue;
+
+    const index = i - start;
+    pSet[index] = price;
+    min = Math.min(min, price);
+    max = Math.max(max, price);
+    if (i >= 199) {
+      const average = rolling / 200;
+      uSet[index] = average * (1 + upB);
+      lSet[index] = average * (1 - dnB);
+      min = Math.min(min, lSet[index]);
+      max = Math.max(max, uSet[index]);
+    }
+  }
+
   const range = (max - min) || 1;
-
-  const trans = (v, i) => ({
-    x: 15 + (i / Math.max(1, SIZE - 1)) * 470,
-    y: 285 - ((v - min) / range) * 270
-  });
+  const xStep = 470 / Math.max(1, SIZE - 1);
 
   const plot = (data, color, width) => {
     ctx.beginPath();
     let started = false;
-    data.forEach((v, i) => {
-      if (!Number.isFinite(v)) return;
-      const pt = trans(v, i);
+    for (let i = 0; i < data.length; i++) {
+      const value = data[i];
+      if (!Number.isFinite(value)) continue;
+      const x = 15 + i * xStep;
+      const y = 285 - ((value - min) / range) * 270;
       if (!started) {
-        ctx.moveTo(pt.x, pt.y);
+        ctx.moveTo(x, y);
         started = true;
       } else {
-        ctx.lineTo(pt.x, pt.y);
+        ctx.lineTo(x, y);
       }
-    });
+    }
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.lineCap = 'round';
@@ -141,7 +150,11 @@ function drawFGIChart(canvasId, data) {
   const ctx = getHDContext(canvasId, W, H);
   if (!ctx || !Array.isArray(data) || data.length < 2) return;
 
-  const values = data.slice(-90).map(d => Number(d.y)).filter(Number.isFinite);
+  const values = [];
+  for (let i = Math.max(0, data.length - 90); i < data.length; i++) {
+    const value = Number(data[i]?.y);
+    if (Number.isFinite(value)) values.push(value);
+  }
   if (values.length < 2) return;
 
   const PAD_L = 8, PAD_R = 8, PAD_T = 12, PAD_B = 12;
@@ -152,12 +165,12 @@ function drawFGIChart(canvasId, data) {
 
   ctx.strokeStyle = 'rgba(170,170,170,.20)';
   ctx.lineWidth = 1;
-  [25, 50, 75].forEach(level => {
+  for (let level = 25; level <= 75; level += 25) {
     ctx.beginPath();
     ctx.moveTo(PAD_L, toY(level));
     ctx.lineTo(W - PAD_R, toY(level));
     ctx.stroke();
-  });
+  }
 
   ctx.beginPath();
   values.forEach((v, i) => {
@@ -222,8 +235,7 @@ function drawGauge(canvasId, value) {
   ctx.fillText(val.toFixed(0), lx, ly);
 }
 
-function tokenMarkup(token, isAlert) {
-  if (isAlert) return `<span class="token-alert">${escapeHtml(token)}</span>`;
+function tokenMarkup(token) {
   if (token.includes('·')) {
     return token.split('·').map(part => `<span class="${etfClass(part)}">${escapeHtml(part)}</span>`).join('<span class="token-dot">·</span>');
   }
@@ -239,7 +251,7 @@ function renderSignal(containerId, sig) {
     const token = row?.[0] ?? '';
     const action = row?.[1] ?? '';
     if (isAlert) return `<div class="sig-row"><span class="token-alert">${escapeHtml(`${token} ${action}`)}</span></div>`;
-    return `<div class="sig-row">${tokenMarkup(token, false)}<span class="token-action"> ${escapeHtml(action)}</span></div>`;
+    return `<div class="sig-row">${tokenMarkup(token)}<span class="token-action"> ${escapeHtml(action)}</span></div>`;
   }).join('');
 
   const drawdown = Number(sig.drawdown);

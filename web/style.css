@@ -11,15 +11,7 @@
   --tqqq:#e8714f;
   --spym:#b07cc0;
   --sgov:#5bb8e8;
-  --cp:#80dfff;
-  --upper:#e070c0;
-  --lower:#afd485;
   --alert:#ff4d4d;
-  --extreme-fear:#e8714f;
-  --fear:#f0a0a0;
-  --neutral:#aaaaaa;
-  --greed:#5bb8e8;
-  --extreme-greed:#b07cc0;
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -218,7 +210,7 @@ canvas{display:block;max-width:100%}
   }
   .title,.fgi-header{font-size:clamp(16px,4.0vw,18px)}
   .version{font-size:clamp(8px,2.0vw,9px)}
-  .updated-time{font-size:clamp(10px,2.5vw,11.25px);margin-top:.3em}
+  .updated-time{font-size:clamp(10px,2.5vw,11.25px)}
   .content-row{gap:6px;padding-top:clamp(5px,1.25vw,5.625px)}
   .fgi-row{padding-top:clamp(3px,.75vw,3.375px)}
   #spx-info,
@@ -228,7 +220,7 @@ canvas{display:block;max-width:100%}
     --drawdown-size:clamp(8.8px,2.6767vw,12.4667px);
   }
   .fgi-rating{font-size:clamp(11.5385px,3.3462vw,16.1538px)}
-  .fgi-stats{font-size:clamp(10px,2.9vw,14px);gap:0}
+  .fgi-stats{font-size:clamp(10px,2.9vw,14px)}
   .fgi-info-box canvas{width:100%}
 }
 

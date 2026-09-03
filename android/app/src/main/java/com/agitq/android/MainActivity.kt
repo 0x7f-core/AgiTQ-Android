@@ -1,49 +1,51 @@
 package com.agitq.android
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
 
-class MainActivity : ComponentActivity() {
+class MainActivity : Activity() {
+    private lateinit var dashboard: WebView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
-                        webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView,
-                                request: WebResourceRequest
-                            ): Boolean {
-                                if (!request.isForMainFrame) return false
-                                return openOutsideApp(request.url)
-                            }
-
-                            @Deprecated("Used on Android versions below API 24")
-                            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                                return openOutsideApp(Uri.parse(url))
-                            }
-                        }
-                        loadUrl(DASHBOARD_URL)
-                    }
+        dashboard = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): Boolean {
+                    if (!request.isForMainFrame) return false
+                    return openOutsideApp(request.url)
                 }
-            )
+            }
+            loadUrl(DASHBOARD_URL)
         }
+        setContentView(
+            dashboard,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+    }
+
+    override fun onDestroy() {
+        if (::dashboard.isInitialized) {
+            dashboard.stopLoading()
+            dashboard.destroy()
+        }
+        super.onDestroy()
     }
 
     private fun openOutsideApp(uri: Uri): Boolean {

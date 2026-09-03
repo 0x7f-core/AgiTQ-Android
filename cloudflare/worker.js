@@ -3,6 +3,7 @@ const STALE_CACHE_TTL = 7 * 24 * 60 * 60;
 // Two attempts must finish before the Android/Web 20-second client timeout.
 const UPSTREAM_TIMEOUT_MS = 8000;
 const UPSTREAM_ATTEMPTS = 2;
+const API_VERSION = '4.38';
 
 const NEW_YORK_DATE = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
@@ -73,31 +74,26 @@ async function fetchWithRetry(url, options = {}, attempts = UPSTREAM_ATTEMPTS) {
   throw lastError;
 }
 
-function sma(data, period) {
-  const out = new Array(data.length).fill(null);
-  let sum = 0;
-  for (let i = 0; i < data.length; i++) {
-    sum += data[i];
-    if (i >= period) sum -= data[i - period];
-    if (i >= period - 1) out[i] = sum / period;
-  }
-  return out;
-}
-
 function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
-  const ma = sma(sig.closes, period);
   let position = 'BELOW';
   let localPeak = 0;
   let tsArmed = true;
   let daysAbove = 0;
   let isAlert = false;
   let alertMsg = '';
+  let rollingSum = 0;
+  let latestSma = null;
 
   for (let i = 0; i < sig.closes.length; i++) {
     const cSig = sig.closes[i];
-    const cSma = ma[i];
+    rollingSum += cSig;
+    if (i >= period) rollingSum -= sig.closes[i - period];
+    if (i < period - 1) continue;
+
+    const cSma = rollingSum / period;
+    latestSma = cSma;
     const cTqqq = tqqq.closes[i];
-    if (!Number.isFinite(cSma) || !Number.isFinite(cTqqq)) continue;
+    if (!Number.isFinite(cTqqq)) continue;
 
     const bUp = cSma * (1 + upB);
     const bDown = cSma * (1 - dnB);
@@ -142,17 +138,17 @@ function analyzeSignal(sig, tqqq, period, mode, upB, dnB) {
   if (position === 'BELOW') return {
     name: '하단 밴드 이탈 (전량 탈출)', alert: false,
     lines: [['TQQQ·SPYM', '전량 매도'], ['SGOV', '대피 완료']],
-    drawdown: null, position, daysAbove, sma: ma[ma.length - 1],
+    drawdown: null, position, daysAbove, sma: latestSma,
   };
   if (isAlert) return {
     name: alertMsg, alert: true,
     lines: [['TQQQ', '절반 매도'], ['SPYM', '즉시 전환']],
-    drawdown: dd, position, daysAbove, sma: ma[ma.length - 1],
+    drawdown: dd, position, daysAbove, sma: latestSma,
   };
-  if (daysAbove === 1) return { name: '상단 밴드 돌파 1일 차', alert:false, lines:[['TQQQ','1/3 매수'],['SGOV','일부 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
-  if (daysAbove === 2) return { name: '상단 밴드 돌파 2일 차', alert:false, lines:[['TQQQ','2/3 매수'],['SGOV','추가 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
-  if (daysAbove === 3) return { name: '상단 밴드 돌파 3일 차', alert:false, lines:[['TQQQ','풀매수'],['SGOV','전량 매도']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
-  return { name:`상단 밴드 위 ${daysAbove}일 차 (추세 유지)`, alert:false, lines:[['TQQQ','보유 유지'],['SPYM','추가 매수']], drawdown:dd, position, daysAbove, sma:ma[ma.length-1] };
+  if (daysAbove === 1) return { name: '상단 밴드 돌파 1일 차', alert:false, lines:[['TQQQ','1/3 매수'],['SGOV','일부 매도']], drawdown:dd, position, daysAbove, sma:latestSma };
+  if (daysAbove === 2) return { name: '상단 밴드 돌파 2일 차', alert:false, lines:[['TQQQ','2/3 매수'],['SGOV','추가 매도']], drawdown:dd, position, daysAbove, sma:latestSma };
+  if (daysAbove === 3) return { name: '상단 밴드 돌파 3일 차', alert:false, lines:[['TQQQ','풀매수'],['SGOV','전량 매도']], drawdown:dd, position, daysAbove, sma:latestSma };
+  return { name:`상단 밴드 위 ${daysAbove}일 차 (추세 유지)`, alert:false, lines:[['TQQQ','보유 유지'],['SPYM','추가 매수']], drawdown:dd, position, daysAbove, sma:latestSma };
 }
 
 function marketDateKey(timestamp) {
@@ -161,10 +157,15 @@ function marketDateKey(timestamp) {
 
 // Yahoo 종목별 누락 거래일이나 실시간 시각 차이가 있어도 같은 뉴욕 거래일끼리만
 // 전략 계산에 사용한다. 정상 응답에서는 원본 Scriptable의 인덱스 결과와 동일하다.
-function alignForSignal(sig, tqqq) {
-  const tqqqByDate = new Map(
-    tqqq.timestamps.map((timestamp, index) => [marketDateKey(timestamp), tqqq.closes[index]])
-  );
+function leveragedCloseIndex(tqqq) {
+  const byDate = new Map();
+  for (let index = 0; index < tqqq.timestamps.length; index++) {
+    byDate.set(marketDateKey(tqqq.timestamps[index]), tqqq.closes[index]);
+  }
+  return byDate;
+}
+
+function alignForSignal(sig, tqqq, tqqqByDate = leveragedCloseIndex(tqqq)) {
   const timestamps = [];
   const sigCloses = [];
   const tqqqCloses = [];
@@ -193,7 +194,6 @@ async function yahoo(url) {
       'Accept': 'application/json',
     },
   });
-  if (!r.ok) throw new Error(`Yahoo ${r.status}`);
   const j = await r.json();
   const res = j.chart.result?.[0];
   if (!res) throw new Error('Yahoo empty result');
@@ -241,12 +241,15 @@ async function fetchFGI() {
   // latest 90 points, matching the original Scriptable widget.
   const data = j.fear_and_greed_historical?.data || [];
   if (data.length > 0) {
-    const history = data.slice(-90).map(x => ({
-        x: x.x ?? x.date,
-        y: Number(x.y),
-        rating: x.rating || fgiRating(Number(x.y)),
-      }))
-      .filter(x => x.x != null && Number.isFinite(x.y));
+    const history = [];
+    for (let index = Math.max(0, data.length - 90); index < data.length; index++) {
+      const item = data[index];
+      const x = item.x ?? item.date;
+      const y = Number(item.y);
+      if (x != null && Number.isFinite(y)) {
+        history.push({ x, y, rating: item.rating || fgiRating(y) });
+      }
+    }
     if (history.length) return history;
   }
 
@@ -263,7 +266,7 @@ async function fetchFGI() {
   throw new Error('CNN response format changed');
 }
 
-export { sma, analyzeSignal, alignForSignal, marketDateKey };
+export { analyzeSignal, alignForSignal, marketDateKey };
 
 export default {
   async fetch(request, env, ctx) {
@@ -272,7 +275,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok:true, service:'AgiTQ API', version:'4.29' });
+      return json({ ok:true, service:'AgiTQ API', version:API_VERSION });
     }
 
     if (url.pathname !== '/api/market') {
@@ -292,15 +295,18 @@ export default {
       }
     }
 
-    const staleResponse = await cache.match(staleKey);
-    const staleData = staleResponse
-      ? await staleResponse.clone().json().catch(() => null)
-      : null;
+    let staleDataPromise;
+    const readStaleData = () => {
+      staleDataPromise ??= cache.match(staleKey)
+        .then(response => response ? response.json() : null)
+        .catch(() => null);
+      return staleDataPromise;
+    };
 
     try {
       // CNN과 Yahoo를 동시에 시작해 최악 응답 시간을 한 재시도 구간 안으로 제한한다.
-      const [results, fgiResult] = await Promise.all([
-        Promise.allSettled([
+      const [[spx, qqq, tqqq], fgiResult] = await Promise.all([
+        Promise.all([
           yahoo(YAHOO.SPX),
           yahoo(YAHOO.QQQ),
           yahoo(YAHOO.TQQQ),
@@ -310,36 +316,33 @@ export default {
           error => ({ history: [], error: error?.message || String(error) }),
         ),
       ]);
-      const labels = ['SPX', 'QQQ', 'TQQQ'];
-      const failures = results
-        .map((result, index) => result.status === 'rejected'
-          ? `${labels[index]}: ${result.reason?.message || result.reason}`
-          : null)
-        .filter(Boolean);
-      if (failures.length) throw new Error(failures.join('; '));
-      const [spx, qqq, tqqq] = results.map(result => result.value);
 
       // FGI is kept separate so a temporary CNN block does not take down
       // the entire market API. This is important for Android widgets.
       let fgi = fgiResult.history;
       const fgiError = fgiResult.error;
       if (fgiError) {
+        const staleData = await readStaleData();
         if (staleData?.FGI?.available && Array.isArray(staleData.FGI.history)) {
           fgi = staleData.FGI.history;
         }
       }
 
-      const spxAligned = alignForSignal(spx, tqqq);
-      const qqqAligned = alignForSignal(qqq, tqqq);
+      const tqqqByDate = leveragedCloseIndex(tqqq);
+      const spxAligned = alignForSignal(spx, tqqq, tqqqByDate);
+      const qqqAligned = alignForSignal(qqq, tqqq, tqqqByDate);
       const spxSignal = analyzeSignal(spxAligned.sig, spxAligned.tqqq, 200, 'multi', .025, .025);
       const qqqSignal = analyzeSignal(qqqAligned.sig, qqqAligned.tqqq, 200, 'single', .02, .02);
       const latest = fgi[fgi.length-1];
-      const avg30 = fgi.length
-        ? fgi.slice(-30).reduce((s,d)=>s+d.y,0) / Math.min(30,fgi.length)
-        : null;
+      const averageCount = Math.min(30, fgi.length);
+      let averageSum = 0;
+      for (let index = fgi.length - averageCount; index < fgi.length; index++) {
+        averageSum += fgi[index].y;
+      }
+      const avg30 = averageCount ? averageSum / averageCount : null;
 
       const payload = {
-        version:'v4.29',
+        version:`v${API_VERSION}`,
         updated:new Date().toISOString(),
         SPX:{ price:spx.price, closes:spx.closes, timestamps:spx.timestamps, mTime:spx.mTime, signal:spxSignal },
         QQQ:{ price:qqq.price, closes:qqq.closes, timestamps:qqq.timestamps, mTime:qqq.mTime, signal:qqqSignal },
@@ -367,6 +370,7 @@ export default {
       ]));
       return response;
     } catch (e) {
+      const staleData = await readStaleData();
       if (staleData) {
         return json({
           ...staleData,

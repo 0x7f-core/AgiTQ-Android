@@ -20,12 +20,20 @@ object WidgetRefreshCoordinator {
     }
 
     suspend fun updateAll(context: Context) {
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val glanceManager = GlanceAppWidgetManager(context)
         var firstError: Throwable? = null
-        runCatching { updateProvider(context, SpxWidget(), SpxWidgetReceiver::class.java) }
+        runCatching {
+            updateProvider(context, appWidgetManager, glanceManager, SpxWidget(), SpxWidgetReceiver::class.java)
+        }
             .onFailure { firstError = it }
-        runCatching { updateProvider(context, QqqWidget(), QqqWidgetReceiver::class.java) }
+        runCatching {
+            updateProvider(context, appWidgetManager, glanceManager, QqqWidget(), QqqWidgetReceiver::class.java)
+        }
             .onFailure { if (firstError == null) firstError = it }
-        runCatching { updateProvider(context, FgiWidget(), FgiWidgetReceiver::class.java) }
+        runCatching {
+            updateProvider(context, appWidgetManager, glanceManager, FgiWidget(), FgiWidgetReceiver::class.java)
+        }
             .onFailure { if (firstError == null) firstError = it }
         firstError?.let { throw it }
     }
@@ -37,11 +45,11 @@ object WidgetRefreshCoordinator {
      */
     private suspend fun updateProvider(
         context: Context,
+        manager: AppWidgetManager,
+        glanceManager: GlanceAppWidgetManager,
         widget: GlanceAppWidget,
         receiverClass: Class<*>
     ) {
-        val manager = AppWidgetManager.getInstance(context)
-        val glanceManager = GlanceAppWidgetManager(context)
         val component = ComponentName(context, receiverClass)
         manager.getAppWidgetIds(component).forEach { appWidgetId ->
             widget.update(context, glanceManager.getGlanceIdBy(appWidgetId))
